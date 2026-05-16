@@ -1,0 +1,26 @@
+services:
+  aglabs_mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: aglabs_mosquitto
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto/config:/mosquitto/config:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - boreas_net
+
+  aglabs_mqttx:
+    image: emqx/mqttx-web:latest
+    container_name: aglabs_mqttx
+    restart: unless-stopped
+    networks:
+      - boreas_net
+
+networks:
+  boreas_net:
+    external: true
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:
