@@ -1,2 +1,5 @@
 mosquitto/config/conf.d/bridge.conf
 .env
+
+# Claude Code session config (per-machine, no compartir)
+.claude/
