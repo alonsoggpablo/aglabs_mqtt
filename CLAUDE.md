@@ -86,10 +86,12 @@ Tactica (`out` no está configurado): el bridge es estrictamente de lectura.
 | Fichero | Contiene | Origen |
 |---------|----------|--------|
 | `mosquitto/config/conf.d/bridge.conf` | usuario/password del bróker Tactica | copiado de `/root/nexus/.env` (`MQTT_USERNAME`, `MQTT_PASSWORD`) |
-| `/root/boreas_rgiot/ssl/htpasswd_aglabs_mqtt` | hash apr1 del basic auth `pablo` | generado con `openssl passwd -apr1`; password en memoria de Claude (`user_credentials.md`) |
+| `mosquitto/config/passwordfile` | hashes mosquitto `$7$` de publishers/subscribers MQTT-nativos | generado con `mosquitto_passwd -b` dentro del contenedor; ver §"Usuarios MQTT (password_file + ACL)" |
+| `/root/boreas_rgiot/ssl/htpasswd_aglabs_mqtt` | hash apr1 del basic auth `pablo` (solo UI: `/`, `/dashboard/`) | generado con `openssl passwd -apr1`; password en memoria de Claude (`user_credentials.md`) |
 
-**Ninguno se commitea**. El bridge.conf está en `.gitignore` local; el
-htpasswd está en `.gitignore` de boreas_rgiot (patrón `ssl/htpasswd_*`).
+**Ninguno se commitea**. El bridge.conf y el passwordfile están en
+`.gitignore` local; el htpasswd está en `.gitignore` de boreas_rgiot
+(patrón `ssl/htpasswd_*`).
 
 Si se redespliega en otra máquina:
 1. Copiar el .env de Nexus para tener las credenciales del bróker Tactica.
@@ -99,17 +101,34 @@ Si se redespliega en otra máquina:
 
 ## Auth y exposición pública
 
-- **Mosquitto**: `allow_anonymous true` en ambos listeners. **Seguro hoy**
-  porque ninguno se expone al host — solo accesibles desde `boreas_net`.
+- **Mosquitto**: `per_listener_settings true`, ambos listeners (1883 TCP y
+  9001 WS) con `listener_allow_anonymous true` + `password_file` + `acl_file`.
+  Coexisten anónimos (broad readwrite, preserva dashboard auto-connect y
+  bridge a Tactica) con usuarios autenticados de ACL estricta (publishers
+  AGlabs-nativos, subscriber de Telegraf). Detalle de usuarios y políticas
+  en §"Usuarios MQTT (password_file + ACL)". Ninguno de los dos listeners
+  se expone al host — solo accesibles desde `boreas_net`; el listener 9001
+  se publica al exterior vía proxy nginx en `wss://mqtt.aglabs.es/mqtt`.
   El día que se abra el puerto 8883 al exterior (para Shellys reconfigurados
   por Diana), hay que: (a) `listener 8883` con `cafile/certfile/keyfile` del
-  cert de mqtt.aglabs.es, (b) `passwordfile` + ACL, (c) `allow_anonymous
-  false` SOLO para ese listener (mantenerlo en true para 1883/9001 internos),
-  (d) abrir el puerto en el firewall.
+  cert de mqtt.aglabs.es, (b) `listener_allow_anonymous false` SOLO para
+  ese listener (mantenerlo en true para 1883/9001 internos), (c) password
+  file + ACL ya compartidos, (d) abrir el puerto en el firewall.
 - **UI** (`/` y `/dashboard/` en `mqtt.aglabs.es`): protegidas con HTTP
-  basic auth en nginx. Usuario único `pablo`. Defensa en profundidad
-  combinada con `AppItem.restricted_to_users=[pablo]` en AG (el card del
-  portal solo lo ve pablo).
+  basic auth en nginx (location-scoped, NO server-scoped — ver más abajo).
+  Usuario único `pablo`. Defensa en profundidad combinada con
+  `AppItem.restricted_to_users=[pablo]` en AG (el card del portal solo lo
+  ve pablo).
+- **/mqtt** (WebSocket público en `mqtt.aglabs.es/mqtt`): **sin basic auth**.
+  La autenticación es MQTT-nativa (CONNECT username/password) contra
+  `password_file` + `acl_file` del bróker. Crítico para que publishers
+  externos (radar_iot wrapper, futuros) conecten via WSS con SOLO sus
+  credenciales MQTT (Paho `username_pw_set`) sin necesidad de inyectar
+  cabeceras `Authorization: Basic` en el WS upgrade. Esto se gestiona en
+  `/root/boreas_rgiot/nginx.conf` vhost `mqtt.aglabs.es` moviendo el
+  `auth_basic` desde el server block a los `location / { ... }` y
+  `location ^~ /dashboard/ { ... }`. **No revertir** o publishers no-browser
+  dejan de funcionar (paho no soporta basic auth en WS sin custom headers).
 - **No SSO**: AG generaría `/sso/?token=<jwt>` por defecto para apps con
   backend Django. Como mqtt.aglabs.es no tiene backend que valide JWT,
   el `AppItem` se registra con `kind='external'` para que AG redirija
@@ -117,6 +136,92 @@ Si se redespliega en otra máquina:
   quiere single-click sin diálogo basic auth, construir un shim Python
   (~50 líneas) que valide el JWT y setee cookie; nginx haría `auth_request`
   contra el shim.
+
+## Usuarios MQTT (password_file + ACL)
+
+Desde 2026-05-28, Mosquitto autentica clientes con `password_file` y
+ACL granular (`acl_file`) además de permitir tráfico anónimo amplio en
+ambos listeners. Política: cada publisher AGlabs-nativo tiene su propio
+usuario con permisos mínimos. El subscriber de Telegraf también es
+autenticado.
+
+| Usuario | Rol | Permisos ACL |
+|---------|-----|--------------|
+| `radar_iot_001` | Publisher — primer sensor del piloto radar_iot (uRAD 60 GHz, RPi en Oviedo c/ Independencia 3) | `write` en `aglabs/radar/concejo_oviedo_paso_independencia_3/radar_iot_001/#` |
+| `nexus_telegraf` | Subscriber — Telegraf vuelca a `nexus_radar` hypertable | `read` en `aglabs/radar/#` y `$SYS/#` |
+| `*` (anónimo) | Legacy: dashboard, MQTTX Web, bridge a Tactica | `readwrite #` |
+
+**Semántica importante de la ACL Mosquitto**: con `password_file` +
+`acl_file` configurados, las reglas `topic …` al margen de cualquier
+bloque `user` aplican **solo** a clientes anónimos. Los bloques
+`user <nombre>` aplican **exclusivamente** a ese usuario (no heredan
+las reglas del nivel superior). Por eso radar_iot_001 SOLO publica en
+los topics de su bloque, mientras anónimos mantienen `readwrite #`.
+
+**Patrón canónico — site + sensor anclados, un solo `#`** (vigente desde
+2026-05-28). El ACL del publisher se ata explícitamente a su pareja
+`<site_slug>/<sensor_id>` y el `#` final cubre los 4 suffixes (`track`,
+`event`, `state`, `$health` incluido LWT y retained). Razón del anclaje:
+**evita spoofing del segmento `<site>`** — un sensor comprometido no puede
+falsificar mensajes como si viniera de otro emplazamiento. Si se reubica
+físicamente un sensor, hay que reemitir credencial + actualizar su bloque
+ACL (es deliberado: el site es dato de inventario, no de config dinámica).
+
+**Cómo añadir un publisher nuevo** (p.ej. `radar_iot_002` en otro concejo):
+```bash
+# 1. Hash del password (32+ chars random)
+NEW_PWD=$(openssl rand -base64 36 | tr -d '\n/+=' | cut -c1-40)
+docker exec aglabs_mosquitto mosquitto_passwd -b /mosquitto/config/passwordfile radar_iot_002 "$NEW_PWD"
+
+# 2. Bloque ACL — añadir al final de mosquitto/config/aclfile usando el
+#    site_slug del emplazamiento (mismo slug que va en RADAR_SITE del .env)
+cat >> /root/aglabs_mqtt/mosquitto/config/aclfile <<'EOF'
+
+user radar_iot_002
+topic write aglabs/radar/concejo_gijon_paso_uria_12/radar_iot_002/#
+EOF
+
+# 3. Owner+perms (Edit/Write resetean a root:root — gotcha conocido)
+chown 1883:1883 /root/aglabs_mqtt/mosquitto/config/{aclfile,passwordfile}
+chmod 0600       /root/aglabs_mqtt/mosquitto/config/{aclfile,passwordfile}
+
+# 4. Reiniciar bróker Y reload nginx (gotcha #6 de §Gotchas: tras restart de
+#    aglabs_mosquitto, los publishers WSS se rechazan en silencio hasta que
+#    nginx se entera de que el upstream se reinició).
+docker restart aglabs_mosquitto
+docker exec boreas_nginx nginx -s reload
+
+# 5. Devolver al agente radar_iot el password ($NEW_PWD) para bridge/.env
+```
+
+**Cómo añadir un subscriber** (p.ej. Cortex anomaly detector lee radar):
+crear bloque `user cortex_radar_consumer` con `topic read aglabs/radar/#`.
+
+**Cuándo extender el bloque `nexus_telegraf`**: cuando Diana reconfigure
+Shellys/Nanoenvi/Engelmann para publicar a `aglabs_mosquitto` directamente
+(en vez de a Tactica), añadir `topic read shellies/#`, `topic read
+shellies2/#`, `topic read gadget/#`, `topic read router/#` al bloque y
+reiniciar. Hasta entonces Telegraf seguirá consumiendo esos topics desde
+Tactica directamente (ver `/root/nexus/telegraf/telegraf.conf`).
+
+**Permisos de los ficheros**: tanto `passwordfile` como `aclfile` están
+`chown 1883:1883` (uid del usuario `mosquitto` dentro del contenedor
+`eclipse-mosquitto:2`) y modo `0600`. Mosquitto 2.1+ emite warnings y
+en versiones futuras rechazará ficheros con permisos más laxos.
+
+**Verificación rápida tras editar la ACL**:
+```bash
+# Confirma que el usuario PUEDE publicar en topic permitido
+docker exec aglabs_mosquitto mosquitto_pub -h 127.0.0.1 -u <user> -P '<pwd>' \
+  -t '<allowed-topic>' -m 'ok'
+
+# Confirma que NO puede publicar en topic prohibido (QoS 0 dropea silente;
+# subscríbete primero como anónimo en otra terminal y mira si llega)
+( docker exec aglabs_mosquitto mosquitto_sub -h 127.0.0.1 -t '<forbidden>' -W 3 -v ) &
+docker exec aglabs_mosquitto mosquitto_pub -h 127.0.0.1 -u <user> -P '<pwd>' \
+  -t '<forbidden>' -m 'denied'
+# (si no aparece nada → ACL denegó como debía)
+```
 
 ## Operación
 
@@ -166,13 +271,36 @@ reload no basta).
    monta como fichero único; al editar con escritura atómica el inode cambia
    y el contenedor se queda con la versión vieja. Siempre `docker restart
    boreas_nginx`. Mismo patrón que `rules.yml` de prometheus-stack.
+6. **`docker restart aglabs_mosquitto` exige `nginx -s reload` después**.
+   Tras reiniciar el bróker, los publishers WSS externos (Pi de radar_iot,
+   etc.) recibían "MQTT_ERR_PROTOCOL" / nginx loggeaba "upstream prematurely
+   closed connection while reading response header". El resolver dinámico
+   (`valid=5s`) re-resuelve el DNS pero las conexiones WebSocket ya
+   inicializadas hacia el upstream viejo del bróker quedan en estado raro y
+   nginx empuja el primer upgrade al socket muerto antes de notarlo. Fix:
+   `docker exec boreas_nginx nginx -s reload` tras CUALQUIER restart de
+   `aglabs_mosquitto`. Síntoma típico (broker logs): "Client X
+   [...] disconnected: not authorised" sin "New client connected" previo,
+   incluso con credenciales válidas — confunde porque parece un problema de
+   ACL, pero el CONNECT nunca llega al bróker (se queda en nginx). Verificado
+   2026-05-28 al provisionar radar_iot_001 y aplicar el ACL más estricto.
+7. **Edit tool resetea owner del aclfile/passwordfile**. El editor reescribe
+   con uid del proceso (root). Tras editar `/root/aglabs_mqtt/mosquitto/
+   config/{aclfile,passwordfile}` con Edit/Write, mosquitto rechaza el
+   arranque ("Unable to open"). Re-aplicar siempre:
+   `chown 1883:1883 <fichero> && chmod 0600 <fichero>` antes del restart.
 
 ## Dependencias cruzadas
 
 - **`/root/boreas_rgiot/nginx.conf`** — contiene el vhost de `mqtt.aglabs.es`,
   el bind-mount al estático y el location `^~ /dashboard/` con alias
   `/app/aglabs_mqtt_web/dashboard/`. Cambiar el path o el dominio aquí
-  requiere editar ahí también.
+  requiere editar ahí también. **`auth_basic` está location-scoped**, no
+  server-scoped: protege `/` (MQTTX Web) y `/dashboard/` (UI propia) pero
+  NO `/mqtt` (WS de publishers, que se autentica con MQTT-nativo). Si
+  refactorizas el vhost, no muevas el `auth_basic` al server block — los
+  publishers no-browser (Paho via WSS) no inyectan basic auth headers en
+  el upgrade y romperías la conexión.
 - **`/root/boreas_rgiot/docker-compose.yml`** — bind-mount
   `/root/aglabs_mqtt/web:/app/aglabs_mqtt_web:ro` en el servicio `nginx`.
   Si se renombra el directorio o el path interno, recordar actualizar el

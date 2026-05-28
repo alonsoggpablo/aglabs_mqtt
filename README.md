@@ -37,17 +37,38 @@ Mientras tanto coexiste con la infraestructura de Tactica sin afectarla.
 
 - **Card en el portal AGlabs**: visible solo para el usuario `pablo`
   (`AppItem.restricted_to_users`).
-- **URL**: pide HTTP basic auth (usuario `pablo`). El navegador la recuerda
-  tras la primera vez.
+- **UIs** (`/` MQTTX Web, `/dashboard/` dashboard propio): HTTP basic auth
+  (usuario `pablo`). El navegador la recuerda tras la primera vez.
+- **WebSocket MQTT** (`/mqtt`): **sin basic auth**. La autenticación es
+  MQTT-nativa (CONNECT user/password) contra el `password_file` del bróker.
+  Esto permite que publishers no-browser (p.ej. el wrapper radar_iot
+  corriendo en una Raspberry Pi) conecten con solo sus credenciales MQTT.
+
+## Auth y ACL (desde 2026-05-28)
+
+El bróker autentica clientes MQTT-nativos con `password_file` + `acl_file`
+en ambos listeners (TCP 1883, WS 9001), conviviendo con tráfico anónimo:
+
+- **Anónimos**: `readwrite #` — preserva el bridge a Tactica, el dashboard
+  con auto-connect y los clientes ad-hoc desde MQTTX Web.
+- **Publishers autenticados** (`radar_iot_NNN`, futuros Shellys nativos):
+  ACL estricta anclada a `aglabs/radar/<site_slug>/<sensor_id>/#`.
+  El `#` final cubre los 4 suffixes del wrapper (`track`, `event`, `state`,
+  `$health`). El anclaje al `<site>` evita spoofing entre emplazamientos.
+- **Subscriber `nexus_telegraf`**: lee `aglabs/radar/#` para volcar a la
+  hypertable `nexus_radar` desde Telegraf.
+
+Detalle de cómo añadir un publisher nuevo, semántica de bloques `user` en
+ACL Mosquitto y trampas en [CLAUDE.md §"Usuarios MQTT"](CLAUDE.md).
 
 ## Puertos / superficie de red
 
 | Listener | Puerto | Expuesto al host | Para qué |
 |----------|--------|------------------|----------|
 | Mosquitto TCP | 1883 | NO (solo `boreas_net`) | Clientes internos (Telegraf, Cortex, …) |
-| Mosquitto WebSockets | 9001 | NO (solo `boreas_net`) | Browser vía proxy nginx `/mqtt` |
-| nginx HTTPS | 443 | sí (vhost `mqtt.aglabs.es`) | UI + WS proxy |
-| Mosquitto TLS para dispositivos | 8883 | **no abierto todavía** | Futura entrada de Shellys reconfigurados |
+| Mosquitto WebSockets | 9001 | NO (solo `boreas_net`) | Browser y publishers WSS vía proxy nginx `/mqtt` |
+| nginx HTTPS | 443 | sí (vhost `mqtt.aglabs.es`) | UI (basic auth) + `/mqtt` WS proxy (auth MQTT-nativa) |
+| Mosquitto TLS para dispositivos | 8883 | **no abierto todavía** | Futura entrada de Shellys reconfigurados (vía 8883/TLS directo, sin nginx) |
 
 ## Operación rápida
 
@@ -71,7 +92,9 @@ aglabs_mqtt/
 ├── docker-compose.yml             # aglabs_mosquitto + aglabs_mqttx
 ├── mosquitto/
 │   └── config/
-│       ├── mosquitto.conf         # listeners + persistencia
+│       ├── mosquitto.conf         # listeners + per_listener_settings + auth
+│       ├── aclfile                # ACL: anónimo broad + usuarios estrictos
+│       ├── passwordfile           # hashes mosquitto $7$ (GITIGNORED)
 │       └── conf.d/
 │           └── bridge.conf        # bridge a Tactica (GITIGNORED)
 ├── web/

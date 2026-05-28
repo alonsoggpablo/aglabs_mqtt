@@ -1,0 +1,40 @@
+# Mosquitto ACL — aglabs_mosquitto
+#
+# Semántica: con per_listener_settings + password_file + acl_file, las reglas
+# al margen de cualquier bloque "user" aplican SOLO a clientes anónimos.
+# Los bloques "user <nombre>" aplican EXCLUSIVAMENTE a ese usuario (no heredan
+# las reglas del nivel superior).
+#
+# Política actual: tráfico anónimo conserva acceso amplio para no romper el
+# dashboard (web/dashboard/index.html, conexión WSS sin credenciales), MQTTX
+# Web y el bridge a Tactica. Cada usuario nuevo nace con permisos mínimos.
+
+# ── Anónimos: full read/write (legacy + dashboard auto-connect) ────────
+topic readwrite #
+
+# ── PATRÓN CANÓNICO para publishers radar_iot_NNN ──────────────────────
+# Una credencial por sensor, ACL anclada a su <site>/<sensor_id> concreto.
+# El `#` final cubre los 4 suffixes que emite el wrapper (track, event,
+# state, $health — incluyendo el LWT y los dos retained). Importante:
+# anclar el SITE evita spoofing del campo <site> del topic — si el usuario
+# se mueve a otro emplazamiento, hay que reemitir credencial + actualizar
+# bloque ACL aquí (es deliberado: el site es un dato de inventario, no de
+# config dinámica del sensor). Plantilla para añadir radar_iot_002, _003…:
+#
+#   user radar_iot_<NNN>
+#   topic write aglabs/radar/<site_slug>/radar_iot_<NNN>/#
+#
+# Tras editar este fichero: docker restart aglabs_mosquitto.
+
+# radar_iot_001 — desplegado en concejo Oviedo, paso peatones c/ Independencia 3
+user radar_iot_001
+topic write aglabs/radar/concejo_oviedo_paso_independencia_3/radar_iot_001/#
+
+# ── nexus_telegraf — subscriber para volcar a hypertables nexus_* ──────
+# Hoy solo suscribe a aglabs/radar/# (radar_iot v1, hypertable nexus_radar).
+# Cuando los Shellys/Nanoenvi/Engelmann migren desde Tactica a este bróker,
+# añadir aquí "topic read shellies/#", "topic read shellies2/#",
+# "topic read gadget/#", "topic read router/#" y reiniciar el contenedor.
+user nexus_telegraf
+topic read aglabs/radar/#
+topic read $SYS/#
