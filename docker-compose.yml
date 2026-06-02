@@ -1,5 +1,7 @@
 services:
   aglabs_mosquitto:
+    mem_limit: 512m
+    memswap_limit: 512m   # Regla #6 — no spill a swap del host
     image: eclipse-mosquitto:2
     container_name: aglabs_mosquitto
     restart: unless-stopped
@@ -11,6 +13,8 @@ services:
       - boreas_net
 
   aglabs_mqttx:
+    mem_limit: 512m
+    memswap_limit: 512m   # Regla #6 — no spill a swap del host
     image: emqx/mqttx-web:latest
     container_name: aglabs_mqttx
     restart: unless-stopped
