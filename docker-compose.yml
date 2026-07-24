@@ -5,8 +5,14 @@ services:
     image: eclipse-mosquitto:2
     container_name: aglabs_mosquitto
     restart: unless-stopped
+    ports:
+      # 8883 = MQTT-over-TLS nativo, expuesto al exterior para los Shelly Gen2
+      # (que no hablan WSS). 1883/9001 siguen SIN publicar al host (solo boreas_net
+      # + nginx 443→9001). Abrir 8883 en el firewall del host aparte.
+      - "8883:8883"
     volumes:
       - ./mosquitto/config:/mosquitto/config:ro
+      - ./mosquitto/certs:/mosquitto/certs:ro   # cert LE copiado con owner 1883 (sync_certs.sh)
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
     networks:

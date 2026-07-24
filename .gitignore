@@ -4,3 +4,6 @@ mosquitto/config/passwordfile
 
 # Claude Code session config (per-machine, no compartir)
 .claude/
+
+# Cert LE copiado para el listener 8883 (privkey — NUNCA commitear)
+mosquitto/certs/

@@ -106,14 +106,50 @@ Si se redespliega en otra máquina:
   Coexisten anónimos (broad readwrite, preserva dashboard auto-connect y
   bridge a Tactica) con usuarios autenticados de ACL estricta (publishers
   AGlabs-nativos, subscriber de Telegraf). Detalle de usuarios y políticas
-  en §"Usuarios MQTT (password_file + ACL)". Ninguno de los dos listeners
-  se expone al host — solo accesibles desde `boreas_net`; el listener 9001
-  se publica al exterior vía proxy nginx en `wss://mqtt.aglabs.es/mqtt`.
-  El día que se abra el puerto 8883 al exterior (para Shellys reconfigurados
-  por Diana), hay que: (a) `listener 8883` con `cafile/certfile/keyfile` del
-  cert de mqtt.aglabs.es, (b) `listener_allow_anonymous false` SOLO para
-  ese listener (mantenerlo en true para 1883/9001 internos), (c) password
-  file + ACL ya compartidos, (d) abrir el puerto en el firewall.
+  en §"Usuarios MQTT (password_file + ACL)". Los listeners 1883/9001 no se
+  publican al host — solo accesibles desde `boreas_net`; el 9001 se expone al
+  exterior vía proxy nginx en `wss://mqtt.aglabs.es/mqtt`. **El listener 8883
+  MQTT-TLS nativo SÍ se publica al host** (para los Shelly Gen2, que no hablan
+  WSS) — ver §"Listener 8883 TLS nativo (Shellys)".
+
+### Listener 8883 TLS nativo (Shellys)
+
+Añadido 2026-07-24 para el piloto de migración de Shellys Tactica → aglabs.
+Los **Shelly Gen2 (Pro 3EM / Pro EM50) solo tienen cliente MQTT nativo** — no
+pueden usar la ruta WSS 443→9001 que usa radar_iot. Por eso necesitan un
+listener MQTT-over-TLS en 8883, expuesto al exterior:
+
+- **`mosquitto.conf`**: bloque `listener 8883` con `listener_allow_anonymous
+  false` (este listener SIEMPRE exige auth; 1883/9001 siguen con anónimos para
+  dashboard/bridge) + `certfile`/`keyfile` apuntando a `/mosquitto/certs/`.
+- **Cert**: mismo multi-SAN Let's Encrypt de `boreas.aglabs.es` (incluye la SAN
+  `mqtt.aglabs.es`). **No se monta `/etc/letsencrypt`**: mosquitto corre como
+  uid 1883 y la privkey de LE es `root:root 0600`. Se copia a
+  `mosquitto/certs/` con owner 1883 vía [`scripts/sync_certs.sh`](scripts/sync_certs.sh)
+  (gitignored — contiene la privkey). Renovación: enlazar el script como
+  deploy-hook de certbot (`/etc/letsencrypt/renewal-hooks/deploy/`), que re-copia
+  y reinicia el broker en cada renovación.
+- **compose**: `ports: ["8883:8883"]` + `./mosquitto/certs:/mosquitto/certs:ro`.
+- **Firewall**: abrir 8883/tcp en el host (los Shelly conectan por la WAN de su
+  RUT a `mqtt.aglabs.es:8883`).
+- **Usuario por Shelly**: una credencial por dispositivo, ACL anclada a su
+  prefijo nativo `shellies2/<cid>` con **`readwrite`** (el firmware publica
+  status Y se suscribe a `.../rpc` + `.../command`). NO usa el prefijo
+  `aglabs/<kind>/…` de radar — los Shelly conservan su prefijo nativo para no
+  tocar los scripts mJS. Primer usuario: `shellypro3em-34987a673194` (Shelly
+  DEMO Pablo Oviedo).
+- **Validación sin tocar el broker vivo**: `docker run --rm` un
+  `eclipse-mosquitto:2` efímero con la config montada y mirar que abre 8883 sin
+  error de cert/ACL (ojo: reutiliza el `remote_clientid` del bridge → parpadea
+  la conexión Tactica del broker vivo unos segundos; se reconecta solo).
+- **Gotcha #7 aplica al `aclfile`/`passwordfile`**: editarlos con un editor
+  resetea owner a `root` → mosquitto (uid 1883) no los puede leer y el próximo
+  restart falla. Tras cualquier edición: `chown 1883:1883` + `chmod 0600`.
+
+**Estado 2026-07-24:** config lista y validada en dry-run. Pendiente de Fase 3
+(abrir firewall + `docker compose up -d` que recrea el broker con el listener +
+`nginx -s reload`). Ingesta a Nexus sigue pendiente del transformador
+`shellies2/# → gadget/<uuid>` (bloqueador funcional, scope Nexus/Boreas).
 - **UI** (`/` y `/dashboard/` en `mqtt.aglabs.es`): protegidas con HTTP
   basic auth en nginx (location-scoped, NO server-scoped — ver más abajo).
   Usuario único `pablo`. Defensa en profundidad combinada con
