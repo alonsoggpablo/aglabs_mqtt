@@ -35,6 +35,11 @@ topic readwrite #
 user nexus_telegraf
 topic read aglabs/radar/#
 topic read $SYS/#
+# Shelly Gen2 migrados a aglabs: Telegraf/Nexus ingiere su medida eléctrica
+# directamente desde shellies2/<cid>/status/* (sin pasar por gadget/<uuid>, que
+# lo generaba la nube Tactica). Necesario para que un Shelly repuntado a este
+# broker siga apareciendo en nexus_electrical → Boreas. (2026-08-14)
+topic read shellies2/#
 
 # ── lorawan_ops (ChirpStack) — NS+AS+join LoRaWAN, https://lorawan.aglabs.es ──
 # Dos usuarios del stack /root/lorawan_ops contra este broker compartido:
@@ -69,3 +74,20 @@ topic write aglabs/radar/rg_oficinas_centrales/radar_iot_001/#
 # (+ gadget/#, router/#). Para el piloto sobre el Shelly DEMO no hace falta.
 user shellypro3em-34987a673194
 topic readwrite shellies2/shellypro3em-34987a673194/#
+
+user shellyproem50-08f9e0e7d058
+topic readwrite shellies2/shellyproem50-08f9e0e7d058/#
+
+# ── Operador RPC desde aglabs (control de Shellys Gen2 migrados) ────────────
+# Envía RPC a cualquier Shelly (write shellies2/<cid>/rpc) y lee la respuesta.
+# CLAVE DEL DISEÑO: el peticionario DEBE poner src=shellies2/<cid>/<suf>, de modo
+# que la respuesta caiga en shellies2/<cid>/<suf>/rpc — DENTRO del prefijo del
+# device, que ya tiene readwrite en shellies2/<cid>/# y por tanto puede publicarla.
+# Así los comodines son de nivel completo (válidos en mosquitto) y NO hay que
+# ampliar la ACL de cada device. (Un src hermano tipo shellies2/diana-live-<t>
+# NO vale: exigiría 'shellies2/diana-live-+/rpc', comodín parcial que mosquitto
+# rechaza y tumba el broker — probado el 2026-08-14.)
+user aglabs_shelly_rpc
+topic write shellies2/+/rpc
+topic read shellies2/+/+/rpc
+topic read shellies2/+/online

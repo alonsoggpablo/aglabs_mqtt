@@ -184,7 +184,10 @@ autenticado.
 | Usuario | Rol | Permisos ACL |
 |---------|-----|--------------|
 | `radar_iot_001` | Publisher — primer sensor del piloto radar_iot (uRAD 60 GHz, RPi en Oviedo c/ Independencia 3) | `write` en `aglabs/radar/concejo_oviedo_paso_independencia_3/radar_iot_001/#` |
-| `nexus_telegraf` | Subscriber — Telegraf vuelca a `nexus_radar` hypertable | `read` en `aglabs/radar/#` y `$SYS/#` |
+| `nexus_telegraf` | Subscriber — Telegraf vuelca a `nexus_radar` **y** a `nexus_electrical` (Shellys migrados) | `read` en `aglabs/radar/#`, `$SYS/#` y **`shellies2/#`** |
+| `shellypro3em-34987a673194` | Publisher — Shelly Pro 3EM DEMO Pablo Oviedo (piloto, en Tactica todavía) | `readwrite shellies2/shellypro3em-34987a673194/#` |
+| `shellyproem50-08f9e0e7d058` | Publisher — Shelly Pro EM-50 CONSH60134 DEMO A.P. (**migrado a aglabs 2026-08-14**) | `readwrite shellies2/shellyproem50-08f9e0e7d058/#` |
+| `aglabs_shelly_rpc` | Operador RPC — envía comandos a Shellys Gen2 migrados y lee respuestas | `write shellies2/+/rpc`, `read shellies2/+/+/rpc`, `read shellies2/+/online` |
 | `*` (anónimo) | Legacy: dashboard, MQTTX Web, bridge a Tactica | `readwrite #` |
 
 **Semántica importante de la ACL Mosquitto**: con `password_file` +
@@ -232,6 +235,58 @@ docker exec boreas_nginx nginx -s reload
 
 **Cómo añadir un subscriber** (p.ej. Cortex anomaly detector lee radar):
 crear bloque `user cortex_radar_consumer` con `topic read aglabs/radar/#`.
+
+### Migración real de un Shelly Gen2 a aglabs — ingesta + RPC (2026-08-14)
+
+Primer device productivo migrado end-to-end de Tactica a este bróker:
+**`shellyproem50-08f9e0e7d058`** (Shelly Pro EM-50, `CONSH60134`, DEMO A.P.).
+Cadena completa validada: device → `mqtt.aglabs.es:8883` → `nexus_telegraf`
+(`read shellies2/#`) → Telegraf input aglabs (`/root/nexus/telegraf/telegraf.conf`)
+→ Starlark `gen=2em50` → `nexus_electrical` → Boreas (cruce por `upper(uuid)`,
+gadget ya existente). El `Mqtt.SetConfig` lo dispara Diana (`set_mqtt_broker`,
+endpoint `set-broker`); ver `/root/diana/CLAUDE.md §"Migración de broker"`.
+
+**Ingesta — 3 piezas en este repo + Nexus:**
+1. Usuario por device: `readwrite shellies2/<cid>/#` (passwordfile + aclfile).
+2. `nexus_telegraf` amplía ACL con `topic read shellies2/#` (sin esto, la
+   suscripción se deniega **en silencio** — Telegraf loguea `Connected` igual).
+3. Input nuevo en `telegraf.conf` apuntando a `tcp://aglabs_mosquitto:1883`
+   (interno, sin TLS) clonando el bloque EM-50/3EM pero cambiando el transporte.
+   El Starlark es agnóstico al bróker (filtra por tag `gen`) → no se toca.
+
+**RPC desde aglabs — usuario `aglabs_shelly_rpc`:**
+```
+user aglabs_shelly_rpc
+topic write shellies2/+/rpc      # enviar petición a cualquier Shelly
+topic read  shellies2/+/+/rpc    # leer la respuesta (4 niveles)
+topic read  shellies2/+/online
+```
+**CLAVE del diseño**: el peticionario DEBE poner `src=shellies2/<cid>/<suf>`,
+de modo que la respuesta caiga en `shellies2/<cid>/<suf>/rpc`, **dentro** del
+prefijo del device (que ya tiene `readwrite shellies2/<cid>/#` y por tanto puede
+publicarla). Así los comodines de la ACL son de nivel completo. Ejemplo:
+```bash
+CID=shellyproem50-08f9e0e7d058; SRC="shellies2/$CID/aglabs-rpc"
+# terminal A: escucha la respuesta
+mosquitto_sub -h mqtt.aglabs.es -p 8883 --capath /etc/ssl/certs \
+  -u aglabs_shelly_rpc -P '<pwd>' -t "$SRC/rpc" -v
+# terminal B: envía la orden
+mosquitto_pub -h mqtt.aglabs.es -p 8883 --capath /etc/ssl/certs \
+  -u aglabs_shelly_rpc -P '<pwd>' -t "shellies2/$CID/rpc" \
+  -m "{\"id\":1,\"src\":\"$SRC\",\"method\":\"Shelly.GetDeviceInfo\"}"
+```
+**GOTCHA que tumbó el bróker (~30s el 2026-08-14):** un `src` hermano tipo
+`shellies2/diana-live-<token>` obliga a una ACL `topic write shellies2/diana-live-+/rpc`
+con **comodín parcial** (`diana-live-+`), que mosquitto **rechaza** — no arranca
+el `acl_file` y el bróker entra en bucle de reinicio, afectando a TODOS los
+usuarios (radar, lorawan, dashboard). Los `+` deben ocupar un nivel completo.
+Por eso el `src` va bajo el prefijo del device, no como hermano.
+
+**GOTCHA — validar la ACL sin tumbar el bróker vivo**: antes de `docker restart
+aglabs_mosquitto`, probar en efímero:
+`docker run --rm --volumes-from aglabs_mosquitto --entrypoint sh eclipse-mosquitto
+-c 'mosquitto -c /mosquitto/config/mosquitto.conf -v & sleep 2; kill %1'` y grepear
+`invalid|error`.
 
 **Cuándo extender el bloque `nexus_telegraf`**: cuando Diana reconfigure
 Shellys/Nanoenvi/Engelmann para publicar a `aglabs_mosquitto` directamente

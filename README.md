@@ -55,11 +55,19 @@ en ambos listeners (TCP 1883, WS 9001), conviviendo con tráfico anónimo:
   ACL estricta anclada a `aglabs/radar/<site_slug>/<sensor_id>/#`.
   El `#` final cubre los 4 suffixes del wrapper (`track`, `event`, `state`,
   `$health`). El anclaje al `<site>` evita spoofing entre emplazamientos.
-- **Subscriber `nexus_telegraf`**: lee `aglabs/radar/#` para volcar a la
-  hypertable `nexus_radar` desde Telegraf.
+- **Subscriber `nexus_telegraf`**: lee `aglabs/radar/#` para volcar a
+  `nexus_radar`, y `shellies2/#` para los Shelly Gen2 migrados desde Tactica
+  (→ `nexus_electrical`).
+- **Shellys Gen2 migrados**: un usuario por device (`shellies2/<cid>/#`). El
+  primero productivo, el Pro EM-50 `shellyproem50-08f9e0e7d058` (DEMO A.P.),
+  migró el 2026-08-14 con ingesta y control RPC funcionando.
+- **Operador RPC `aglabs_shelly_rpc`**: envía comandos a los Shellys migrados
+  y lee sus respuestas. El peticionario usa `src=shellies2/<cid>/<suf>` para
+  que la respuesta caiga dentro del prefijo del device.
 
-Detalle de cómo añadir un publisher nuevo, semántica de bloques `user` en
-ACL Mosquitto y trampas en [CLAUDE.md §"Usuarios MQTT"](CLAUDE.md).
+Detalle de cómo añadir un publisher nuevo, la migración Shelly→aglabs, el
+usuario RPC y las trampas (comodines de ACL, validación sin tumbar el bróker)
+en [CLAUDE.md §"Usuarios MQTT"](CLAUDE.md).
 
 ## Puertos / superficie de red
 
@@ -68,7 +76,7 @@ ACL Mosquitto y trampas en [CLAUDE.md §"Usuarios MQTT"](CLAUDE.md).
 | Mosquitto TCP | 1883 | NO (solo `boreas_net`) | Clientes internos (Telegraf, Cortex, …) |
 | Mosquitto WebSockets | 9001 | NO (solo `boreas_net`) | Browser y publishers WSS vía proxy nginx `/mqtt` |
 | nginx HTTPS | 443 | sí (vhost `mqtt.aglabs.es`) | UI (basic auth) + `/mqtt` WS proxy (auth MQTT-nativa) |
-| Mosquitto TLS para dispositivos | 8883 | **config lista, pendiente abrir firewall** | Entrada de Shelly Gen2 reconfigurados (MQTT-TLS nativo, sin nginx — los Shelly no hablan WSS). Cert LE copiado con `scripts/sync_certs.sh`; un usuario MQTT por Shelly con ACL `readwrite shellies2/<cid>/#`. Detalle en CLAUDE.md §"Listener 8883 TLS nativo (Shellys)". |
+| Mosquitto TLS para dispositivos | 8883 | **sí (firewall abierto, en producción)** | Entrada de Shelly Gen2 reconfigurados (MQTT-TLS nativo, sin nginx — los Shelly no hablan WSS). Cert LE copiado con `scripts/sync_certs.sh`; un usuario MQTT por Shelly con ACL `readwrite shellies2/<cid>/#`. Primer device productivo migrado 2026-08-14. Detalle en CLAUDE.md §"Listener 8883 TLS nativo (Shellys)". |
 
 ## Operación rápida
 
