@@ -288,6 +288,43 @@ aglabs_mosquitto`, probar en efímero:
 -c 'mosquitto -c /mosquitto/config/mosquitto.conf -v & sleep 2; kill %1'` y grepear
 `invalid|error`.
 
+### Provisión en bloque de identidades Shelly (migración masiva + fábrica)
+
+Al migrar el parque (144 Gen2) o dar de alta Shellys nuevos, la parte de este
+repo es **crear un usuario MQTT por device** (`shellies2/<cid>/#`). Regla de
+lote: **crear TODAS las identidades primero y reiniciar el bróker UNA vez** — no
+un restart por device (cada uno arrastra el `nginx -s reload` del gotcha #6).
+
+```bash
+# Por cada <cid> (p.ej. shellyproem50-08f9e0e7d058):
+CID=shellyproem50-08f9e0e7d058
+PW=$(python3 -c "import secrets,re;print(re.sub(r'[^A-Za-z0-9]','',secrets.token_urlsafe(36))[:32])")
+HASH=$(docker exec aglabs_mosquitto sh -c "rm -f /tmp/p.$$ && mosquitto_passwd -c -b /tmp/p.$$ '$CID' '$PW' >/dev/null && cat /tmp/p.$$ && rm -f /tmp/p.$$")
+printf '%s\n' "$HASH" >> mosquitto/config/passwordfile
+printf '\nuser %s\ntopic readwrite shellies2/%s/#\n' "$CID" "$CID" >> mosquitto/config/aclfile
+echo "GUARDA: $CID -> $PW"     # se le pasa al device en el Mqtt.SetConfig (lado Diana)
+
+# Al terminar el bloque (una sola vez):
+chown 1883:1883 mosquitto/config/{passwordfile,aclfile}
+chmod 0600       mosquitto/config/{passwordfile,aclfile}
+docker restart aglabs_mosquitto && sleep 3 && docker exec boreas_nginx nginx -s reload
+```
+
+- **Guardar cada `$CID:$PW`**: la contraseña se necesita en el `Mqtt.SetConfig`
+  que dispara Diana (no vive aquí después). El firmware **no** la devuelve por
+  RPC, así que perderla obliga a re-emitirla.
+- **`nexus_telegraf` ya lee `shellies2/#`** y el input aglabs de Telegraf cubre
+  cualquier `<cid>` nuevo → **la ingesta no se toca por device**.
+- **`aglabs_shelly_rpc` ya existe** → el control RPC de Diana cubre cualquier
+  device migrado sin ACL nueva.
+- **Alta de fábrica**: idéntico aquí (crear el usuario con el `<cid>` de fábrica
+  `shellyproem50-<mac>`); lo que cambia es que el destino MQTT se fija en el
+  device por su WebUI/app en vez de por `set-broker` desde Tactica.
+
+Runbook operativo completo (canal de rescate, reboot obligatorio, ventana de
+reloj, verificación) en
+[`/root/diana/docs/runbook_migracion_masiva_aglabs.md`](/root/diana/docs/runbook_migracion_masiva_aglabs.md).
+
 **Cuándo extender el bloque `nexus_telegraf`**: cuando Diana reconfigure
 Shellys/Nanoenvi/Engelmann para publicar a `aglabs_mosquitto` directamente
 (en vez de a Tactica), añadir `topic read shellies/#`, `topic read

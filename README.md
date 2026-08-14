@@ -69,6 +69,14 @@ Detalle de cómo añadir un publisher nuevo, la migración Shelly→aglabs, el
 usuario RPC y las trampas (comodines de ACL, validación sin tumbar el bróker)
 en [CLAUDE.md §"Usuarios MQTT"](CLAUDE.md).
 
+**Migración masiva / alta de fábrica**: la parte de este repo es crear un usuario
+MQTT por Shelly (`shellies2/<cid>/#`) — en bloque, con **un solo restart** del
+bróker por tanda. El paso a paso (identidades en bloque, guardar credenciales,
+ingesta ya global) está en [CLAUDE.md §"Provisión en bloque de identidades
+Shelly"](CLAUDE.md); el runbook operativo completo (canal de rescate, reboot,
+ventana de reloj, verificación) vive en el lado Diana:
+[`/root/diana/docs/runbook_migracion_masiva_aglabs.md`](../diana/docs/runbook_migracion_masiva_aglabs.md).
+
 ## Puertos / superficie de red
 
 | Listener | Puerto | Expuesto al host | Para qué |
