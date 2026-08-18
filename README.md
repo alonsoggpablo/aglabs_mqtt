@@ -125,6 +125,26 @@ repo de Boreas (`/root/boreas_rgiot/nginx.conf` y `docker-compose.yml`),
 no aquí — necesitan estar ahí porque `boreas_nginx` es quien termina el
 TLS y sirve el frontend.
 
+## Certificado RSA para sensores IoT antiguos (Nanoenvi) — 2026-08-18
+
+Los sensores Nanoenvi validan TLS contra un almacén de CA congelado en firmware y
+**rechazan** el certificado multi-SAN de este broker, porque su cadena pasa por
+`ISRG Root X2`. Aceptan el de Tactica (RSA, terminando en `ISRG Root X1`)
+**incluso caducado** — validan la cadena, no la fecha.
+
+Se ha emitido un certificado **RSA aparte** (`mqtt-iaq-rsa`) solo para el listener
+8883, sin tocar el multi-SAN que usan los 15 vhosts web de nginx.
+
+**Estado: emitido y preparado, pendiente de activar** (copiar el cert, cambiar dos
+líneas en `mosquitto.conf` y reiniciar). Los pasos exactos, y por qué se dejó a
+medias, en [CLAUDE.md](CLAUDE.md) §"Cert RSA para dispositivos con almacén de CA
+antiguo".
+
+⚠ **El bridge a Tactica lleva caído desde el 12-ago-2026**: el certificado de
+Tactica caducó y mosquitto valida la fecha, así que no conecta. Este broker no
+recibe `shellies/#`, `shellies2/#`, `gadget/#` ni `router/#` desde entonces.
+Detalle en CLAUDE.md.
+
 ## Más detalles
 
 - Para detalles operativos (auth, gotchas, lecciones, dependencias cruzadas,

@@ -351,6 +351,160 @@ docker exec aglabs_mosquitto mosquitto_pub -h 127.0.0.1 -u <user> -P '<pwd>' \
 # (si no aparece nada → ACL denegó como debía)
 ```
 
+## Cert RSA para dispositivos con almacén de CA antiguo (paso 0 Nanoenvi, 2026-08-18)
+
+Preparativo para migrar los sensores **Nanoenvi (Envira)** desde Tactica a este
+broker. Pedido por Diana; el análisis completo está en
+`/root/diana/CLAUDE.md §"Migrar los Nanoenvi a aglabs"`.
+
+### El problema, medido
+
+Los Nanoenvi validan la cadena TLS contra un almacén de CA congelado en firmware.
+Comparando lo que sirve cada broker:
+
+| | Cadena | Clave | Certs |
+|---|---|---|---|
+| Tactica — **lo aceptan** (incluso caducado) | `leaf -> R13 -> ISRG Root X1` | RSA 2048 | 2 |
+| Este broker (multi-SAN, listener 8883 hoy) | `leaf -> YE1 -> Root YE -> **ISRG Root X2** -> ISRG Root X1` | ECDSA P-256 | 4 |
+| **Nuevo `mqtt-iaq-rsa`** | `leaf -> YR1 -> Root YR -> ISRG Root X1` | **RSA 2048** | 3 |
+
+Que acepten un certificado **caducado** demuestra que validan la cadena pero
+**no la fecha** (equipo sin RTC fiable). Lo que los rompe es la cadena, y el
+sospechoso principal es **ISRG Root X2**, que su almacén casi seguro no tiene.
+El 12-ago-2026 Tactica renovó a la cadena nueva y se le cayeron los 58 sensores
+hasta revertir.
+
+**El certificado emitido es lo mejor obtenible de Let's Encrypt hoy, pero NO es
+idéntico al bueno conocido.** LE ya no emite la cadena clásica de 2 niveles ni
+en RSA: se comprobó la cadena alternativa que ofrece el ACME y es la misma.
+Queda RSA + terminar en ISRG Root X1 (sin pasar por X2), que es el máximo
+acercamiento posible. **Si el sensor piloto lo rechaza igualmente**, las opciones
+restantes son: (a) una CA comercial cuya raíz esté en el firmware, (b) `ssl:false`
+en 1883 (credenciales en claro, desaconsejado), o (c) OTA de firmware con Envira.
+**No** se puede instalar una CA propia: la config MQTT del Nanoenvi (`host`,
+`port`, `ssl`, `user`, `pass`, `topic`, `comm_period`) **no tiene campo `ssl_ca`**.
+
+### Emisión
+
+```bash
+certbot certonly --webroot -w /var/www/certbot -d mqtt.aglabs.es \
+  --cert-name mqtt-iaq-rsa --key-type rsa --rsa-key-size 2048 \
+  --preferred-chain "ISRG Root X1"
+```
+
+Lineage **separado** a propósito: el multi-SAN ECDSA de `boreas.aglabs.es` lo
+usan los 15 vhosts web de nginx y **no se toca**. Solo el listener 8883 pasa a
+RSA. Para el resto de clientes del 8883 el cambio es indiferente (RSA + ISRG
+Root X1 lo acepta todo, y el Shelly migrado va con `ssl_ca:"*"` — no valida).
+
+`scripts/sync_certs.sh` copia también este cert (`rsa_fullchain.pem` /
+`rsa_privkey.pem`, owner 1883) y **no falla** si el lineage no existe.
+
+### Estado: PENDIENTE DE ACTIVAR — 3 pasos
+
+El certificado está emitido y el ACL preparado, pero el listener **sigue en el
+multi-SAN** a propósito. Falta:
+
+```bash
+# 1) copiar el cert RSA con owner 1883
+/root/aglabs_mqtt/scripts/sync_certs.sh
+
+# 2) en mosquitto.conf, listener 8883: cambiar las dos lineas a
+#      certfile /mosquitto/certs/rsa_fullchain.pem
+#      keyfile  /mosquitto/certs/rsa_privkey.pem
+#    (estan marcadas con "PENDIENTE DE ACTIVAR" en el fichero)
+
+# 3) anadir los 2 usuarios al passwordfile y
+docker restart aglabs_mosquitto
+```
+
+**Por qué se dejó a medias:** apuntar el listener a un fichero que no existe
+**impide arrancar mosquitto entero** — se llevaría por delante el 8883 (Shelly
+migrado), el 9001 (dashboard/radar) y el bridge. Con el cert sin copiar, la
+config debe seguir apuntando al multi-SAN.
+
+Verificación después de activar:
+```bash
+echo | openssl s_client -connect mqtt.aglabs.es:8883 -servername mqtt.aglabs.es \
+  -showcerts 2>/dev/null | grep -E "^ *[0-9]+ s:|^ *i:"   # debe acabar en ISRG Root X1, sin X2
+docker logs aglabs_mosquitto --tail 20 | grep -i shellyproem50   # el Shelly debe reconectar
+```
+
+### Usuarios y ACL para Nanoenvi
+
+Topología de topics del firmware (distinta a la de Shelly):
+
+```
+publica medida  ->  IAQ_Measures      <- topic UNICO Y COMPARTIDO por todos
+escucha         ->  IAQ_RPC/<uuid>
+responde        ->  IAQ_RESP/<uuid>
+```
+
+**Consecuencia de seguridad**: `IAQ_Measures` es compartido, así que la escritura
+de medida **no se puede acotar por dispositivo** — cualquier sensor con credencial
+puede publicar medidas de otro. Es el modelo que traen de Tactica (donde además
+comparten el usuario `nodered`/`nodered`, visible en claro en `config.get.mqtt`).
+Aquí se mejora en lo posible: **credencial por sensor**, con RPC y respuesta
+anclados a SU uuid, para que un sensor no lea los comandos de otro ni suplante
+sus respuestas.
+
+Bloques ya añadidos al `aclfile` (con plantilla para dar de alta los siguientes):
+
+- `nanoenvi_cainan0010` — piloto (DEMO / Sede Asturias, uuid `2907f342-...`).
+- `diana_iaq` — plano de control (Diana + Node-RED): lee `IAQ_Measures`, escribe
+  `IAQ_RPC/+`, lee `IAQ_RESP/+`.
+
+**Las contraseñas están generadas pero NO añadidas al `passwordfile`** (ver
+§Estado). Sin ellas, esos dos usuarios no existen todavía para el broker.
+
+**Gotcha #7 recordado**: tras editar `aclfile`/`passwordfile` con un editor, el
+owner vuelve a `root` y mosquitto (uid 1883) deja de leerlos → el siguiente
+restart falla. Siempre `chown 1883:1883` + `chmod 0600` después. (Al `aclfile` ya
+se le hizo.)
+
+### Hallazgo colateral: el bridge a Tactica lleva caído desde el 12-ago
+
+Mirando los logs del broker para esta tarea: **`tactica_bridge` falla de forma
+continua desde 2026-08-12 08:59 UTC** — 17.343 errores, reintentando cada 30 s:
+
+```
+OpenSSL Error ... error:0A000086:SSL routines::certificate verify failed
+Client local.aglabs-mosquitto-bridge disconnected: bad socket read/write: A TLS error occurred
+```
+
+Causa: el certificado de Tactica **caducó el 11-ago 22:36 UTC** y siguen sirviendo
+el viejo (a propósito, para no tumbar los Nanoenvi). Mosquitto **sí** valida la
+caducidad en el bridge, así que no conecta. Es el mismo hecho que obligó a Diana a
+poner `MQTT_TLS_INSECURE=1` el 13-ago; Diana se parcheó, **el bridge no**.
+
+**Impacto real: NINGUNO sobre las lecturas de Boreas** (verificado 2026-08-18).
+`nexus_telegraf` **no lee de este espejo**: conecta **directamente** a Tactica
+(`ssl://mqtt.solutions-iot.es:8883`) con **`insecure_skip_verify = true`**, así que
+el cert caducado no le afecta. Comprobado: el volumen diario de `nexus_iaq` no se
+inmuta al morir el bridge (12-ago 96.775 filas, 13-ago 96.269, 17-ago 93.918) y
+los datos siguen entrando al minuto. Las entradas de telegraf que SÍ apuntan a
+este broker (`tcp://aglabs_mosquitto:1883`) son para los **Shelly ya migrados**
+(`shellies2/+/status/em1:*`, `em:0`) y para `aglabs/radar/#` — todos publican aquí
+**directamente**, no por el espejo.
+
+Lo que se pierde, por tanto, es **la copia local** de `shellies/#`, `shellies2/#`,
+`gadget/#` y `router/#`, no la ingesta. Y conviene matizar la mitigación que le
+atribuye `/root/diana/docs/contingencia_tactica.md`: un espejo Tactica→aglabs solo
+tiene valor **mientras Tactica esté viva**; si Tactica cae, los dispositivos siguen
+apuntando allí y el espejo no tiene nada que copiar. Como red de seguridad ante la
+caída de Tactica vale poco — la mitigación de verdad es migrar los dispositivos.
+
+**Arreglarlo antes de que Tactica renueve no es trivial**: `bridge_insecure true`
+solo desactiva la verificación de *hostname*, no la de caducidad, y mosquitto no
+tiene opción para ignorar fechas. Haría falta sustituir el bridge nativo por un
+relay propio (paho con `CERT_NONE`, igual que `MQTT_TLS_INSECURE` en Diana) que
+suscriba en Tactica y republique aquí.
+
+**No tiene arreglo limpio desde aquí**: `bridge_insecure true` solo desactiva la
+verificación de *hostname*, no la de caducidad. Hasta que Tactica sirva un
+certificado válido, el bridge no levanta — lo que refuerza el argumento para
+migrar los dispositivos a este broker en vez de depender del espejo.
+
 ## Operación
 
 ```bash

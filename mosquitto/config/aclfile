@@ -91,3 +91,40 @@ user aglabs_shelly_rpc
 topic write shellies2/+/rpc
 topic read shellies2/+/+/rpc
 topic read shellies2/+/online
+
+# ── Sensores Nanoenvi (Envira) — IAQ ────────────────────────────────────────
+# Preparado el 2026-08-18 para el piloto de migración desde Tactica.
+#
+# Topología de topics del firmware Nanoenvi (distinta a la de Shelly):
+#   · publica su medida a  IAQ_Measures    ← topic ÚNICO Y COMPARTIDO por TODOS
+#   · escucha comandos en  IAQ_RPC/<uuid>
+#   · responde en          IAQ_RESP/<uuid>
+#
+# CONSECUENCIA DE SEGURIDAD que conviene tener presente: al ser `IAQ_Measures`
+# un topic compartido, NO se puede acotar la escritura por dispositivo — cualquier
+# sensor con credencial puede publicar medidas de cualquier otro. Es el modelo
+# que trae de Tactica (allí TODOS comparten además el usuario `nodered`). Aquí se
+# mejora en lo que se puede: **credencial por sensor**, con el RPC y la respuesta
+# anclados a SU uuid, de modo que un sensor no puede leer los comandos de otro ni
+# suplantar sus respuestas. La medida sigue siendo un espacio común hasta que el
+# firmware soporte un topic por dispositivo.
+#
+# Plantilla para dar de alta cada sensor nuevo (uuid = gadgets.uuid de Boreas):
+#   user nanoenvi_<device_id en minúscula>
+#   topic write IAQ_Measures
+#   topic read  IAQ_RPC/<uuid>
+#   topic write IAQ_RESP/<uuid>
+
+# CAINAN0010 — DEMO / Sede Asturias — PILOTO de migración
+user nanoenvi_cainan0010
+topic write IAQ_Measures
+topic read  IAQ_RPC/2907f342-6541-4baf-be62-ec9cabd74a95
+topic write IAQ_RESP/2907f342-6541-4baf-be62-ec9cabd74a95
+
+# ── Plano de control IAQ (Diana + Node-RED) ─────────────────────────────────
+# Lee la medida de todos, envía RPC a cualquier uuid y lee sus respuestas.
+# Comodines de nivel completo (`+`), válidos en mosquitto.
+user diana_iaq
+topic read  IAQ_Measures
+topic write IAQ_RPC/+
+topic read  IAQ_RESP/+

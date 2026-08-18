@@ -16,6 +16,11 @@
 set -euo pipefail
 
 LE_DIR="/etc/letsencrypt/live/boreas.aglabs.es"
+# Certificado RSA dedicado al listener 8883 (dispositivos IoT con almacén de CA
+# antiguo). Ver §"Cert RSA para dispositivos con almacén de CA antiguo" en
+# CLAUDE.md: los Nanoenvi rechazan la cadena ECDSA del multi-SAN porque pasa por
+# ISRG Root X2. Este va por RSA y termina en ISRG Root X1.
+LE_RSA_DIR="/etc/letsencrypt/live/mqtt-iaq-rsa"
 DEST="$(cd "$(dirname "$0")/.." && pwd)/mosquitto/certs"
 
 mkdir -p "$DEST"
@@ -27,6 +32,19 @@ cp -L "$LE_DIR/privkey.pem"   "$DEST/privkey.pem"
 chown 1883:1883 "$DEST/fullchain.pem" "$DEST/privkey.pem"
 chmod 0644 "$DEST/fullchain.pem"
 chmod 0600 "$DEST/privkey.pem"
+
+# Cert RSA del listener 8883 (opcional: si no existe, no se toca nada y el
+# listener seguirá usando el multi-SAN — el script no debe fallar por esto).
+if [[ -d "$LE_RSA_DIR" ]]; then
+  cp -L "$LE_RSA_DIR/fullchain.pem" "$DEST/rsa_fullchain.pem"
+  cp -L "$LE_RSA_DIR/privkey.pem"   "$DEST/rsa_privkey.pem"
+  chown 1883:1883 "$DEST/rsa_fullchain.pem" "$DEST/rsa_privkey.pem"
+  chmod 0644 "$DEST/rsa_fullchain.pem"
+  chmod 0600 "$DEST/rsa_privkey.pem"
+  echo "cert RSA (mqtt-iaq-rsa) copiado para el listener 8883"
+else
+  echo "AVISO: $LE_RSA_DIR no existe — el listener 8883 usará el cert multi-SAN"
+fi
 
 echo "certs copiados a $DEST (owner 1883:1883)"
 
