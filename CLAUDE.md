@@ -72,10 +72,28 @@ proxea por path al SPA, al dashboard o al WebSocket de Mosquitto.
 Configurados en `mosquitto/config/conf.d/bridge.conf` (gitignored — incluye
 credenciales). Son los que ya consume Nexus + un margen:
 
-- `shellies/#`   — Gen1 EM3/EM2
-- `shellies2/#`  — Gen2 Pro3EM, ProEM50, switches, comandos, rpc
 - `gadget/#`     — UUID-indexado: IAQ (nanoenvi), calor (engelmann), gas (sigfox)
 - `router/#`     — Teltonika señal/uptime
+
+**`shellies/#` y `shellies2/#` se RETIRARON del bridge el 2026-08-31.** No es
+limpieza cosmética: `nexus_telegraf` consume esos mismos topics **en los dos
+brokers** (consumers `nexus-shelly-*` contra Tactica y contra aglabs). Mientras
+el bridge los espejaba, cada mensaje de un Gen1/Gen2 que sigue en Tactica
+llegaba a Nexus **dos veces** — una directa y otra por el espejo — inflando
+`nexus_electrical` y falseando energía. No estalló antes solo porque el bridge
+llevaba días caído; era una mina que se activaba al repararlo. Regla derivada:
+**un topic que Nexus ya consume en ambos brokers NO se puede espejar aquí.**
+
+**El bridge lleva caído desde ~11-ago** con
+`error:0A000086: certificate verify failed`: el cert de `mqtt.solutions-iot.es`
+caducó y el bridge sí valida la cadena (a diferencia de los Shelly, que van con
+`ssl_ca:"*"`). No afecta a la ingesta — Telegraf lee Tactica directo con
+`insecure_skip_verify` — así que el bridge hoy solo aporta el espejo de
+`gadget/#` y `router/#`. Si se quiere revivir: `bridge_insecure true` (o esperar
+a que Tactica renueve). **Efecto colateral a tener presente al diagnosticar:**
+los `shellies2/<cid>/online` retained que quedan en aglabs son espejo viejo de
+Tactica, NO verdad del equipo — un `online false` ahí no significa que el
+dispositivo esté caído si nunca se migró.
 
 Dirección: `in 0` (de remoto a local, QoS 0 — telemetría, no idempotencia).
 Reconnect automático con `restart_timeout 30`. No publicamos NADA hacia
@@ -288,6 +306,56 @@ aglabs_mosquitto`, probar en efímero:
 -c 'mosquitto -c /mosquitto/config/mosquitto.conf -v & sleep 2; kill %1'` y grepear
 `invalid|error`.
 
+### Routers Teltonika migrados (2026-09-01)
+
+**Regla de alcance (usuario, 2026-09-01): un emplazamiento se migra COMPLETO.**
+No está migrado mientras le quede una pieza publicando en Tactica — el router
+incluido.
+
+Credencial por router, ACL `write router/<serial>/#` (solo `write`: el RUT
+publica y no se suscribe). Anclada al **serial**, que es lo que va en el topic;
+ojo, **no** coincide con el `device_id` de Boreas (`COMT241158` vs
+`6005009079`).
+
+**El paquete `mqtt_pub` de Tactica no puede migrar: no soporta TLS.** Poner
+`tls='1'` impide que el servicio arranque (`Failed to initialize service
+configuration`). Aislado con A/B sobre hardware real: `tls=1` con host de
+Tactica → no arranca; `tls=0` con host de aglabs → arranca. Como este broker
+**solo expone el 8883**, no hay ruta. El binario está empaquetado con **UPX**,
+sin LuCI ni documentación (5 ficheros en el paquete), así que tampoco se pueden
+enumerar sus opciones sin desempaquetarlo.
+
+**La salida es el `data_sender` NATIVO de Teltonika**, ya instalado en estos
+equipos con todos sus módulos. Su salida MQTT soporta TLS completo
+(`mqtt_tls`, `mqtt_tls_type`, `mqtt_cafile`, `mqtt_insecure`, credenciales) y
+**valida nuestro certificado contra el almacén de CA del propio router** —
+verificado en el RUT: `Verification: OK`, `Verify return code: 0`. Que el 8883
+sirva ahora un cert **RSA por la cadena clásica** (cambio del 31-ago para los
+Nanoenvi) ayuda también aquí. Ventaja de fondo: deja de depender del software
+del proveedor del que nos estamos yendo.
+
+| Router | Emplazamiento | Desde |
+|---|---|---|
+| `rut_6005009079` (COMT241158) | Demo A.P. Pablo / Fitoria | 01-sep-2026 |
+| `rut_6007130185` (COMT241272) | Demo A.P. Pablo / P. San Francisco | 01-sep-2026 |
+
+Receta completa (config `data_sender`, script Lua y gotchas) en
+`/root/diana/CLAUDE.md §"Migrar la telemetría de un RUT a aglabs"`.
+
+### Estado del parque migrado a aglabs (actualizado 2026-08-31)
+
+| Device | Emplazamiento | Perfil | Estado |
+|---|---|---|---|
+| `shellyproem50-08f9e0e7d058` (CONSH60134) | Demo A.P. Pablo / P. San Francisco | `monophase_EM50` | migrado 14-ago |
+| `shellypro3em-2cbcbba64fd4` (CONSH50050) | Demo A.P. Pablo / Fitoria | `triphase` | **migrado 31-ago** — primer trifásico |
+| `shellypro3em-34987a673194` | DEMO | `triphase` | **NO migrado** — sigue en Tactica |
+
+**Cuidado con `34987a673194`:** tiene usuario y bloque ACL creados aquí desde el
+piloto, pero el dispositivo **nunca se repuntó**. Su presencia en el `aclfile` no
+es prueba de migración — la fuente de verdad es
+`LanDevice.current_mqtt_broker` en Diana. Comprobarlo **siempre** antes de usar
+un equipo como referencia de que "el camino aglabs funciona".
+
 ### Provisión en bloque de identidades Shelly (migración masiva + fábrica)
 
 Al migrar el parque (144 Gen2) o dar de alta Shellys nuevos, la parte de este
@@ -400,7 +468,35 @@ Root X1 lo acepta todo, y el Shelly migrado va con `ssl_ca:"*"` — no valida).
 `scripts/sync_certs.sh` copia también este cert (`rsa_fullchain.pem` /
 `rsa_privkey.pem`, owner 1883) y **no falla** si el lineage no existe.
 
-### Estado: PENDIENTE DE ACTIVAR — 3 pasos
+### Estado: ✅ ACTIVADO el 2026-08-31
+
+El listener 8883 sirve ya el cert RSA. Verificado en caliente:
+
+```
+0 s:CN = mqtt.aglabs.es              i:CN = YR1        ← rsaEncryption
+1 s:CN = YR1                          i:CN = Root YR
+2 s:CN = Root YR                      i:CN = ISRG Root X1
+```
+
+Profundidad 3, RSA, **sin pasar por ISRG Root X2** — exactamente el objetivo.
+Caduca el 16-nov-2026; la renovación la cubre el deploy-hook de certbot, que ya
+invoca `sync_certs.sh` (el cual copia ambos lineages).
+
+**Sin impacto en los Shelly:** `shellypro3em-2cbcbba64fd4` reconectó al instante
+negociando `ECDHE-RSA-AES256-GCM-SHA384` (antes ECDSA) — van con `ssl_ca:"*"` y
+no validan. Ningún otro cliente usa 8883: Telegraf y el RPC de Diana entran por
+1883 interno, el dashboard por WSS 443.
+
+**Vuelta atrás** (30 s): cambiar las dos líneas del listener a
+`fullchain.pem`/`privkey.pem` y `docker restart aglabs_mosquitto`.
+
+**Lo que este cert NO resuelve:** que la cadena sea ahora la "correcta" es una
+hipótesis razonada a partir de lo que sí acepta Tactica, **no una certeza**. El
+firmware Nanoenvi podría rechazarla igual, y **sigue sin haber canal de rescate**.
+Por eso el primer sensor debe ser `CAINAN0010` (DEMO, sede propia).
+
+<details>
+<summary>Procedimiento original de activación (histórico)</summary>
 
 El certificado está emitido y el ACL preparado, pero el listener **sigue en el
 multi-SAN** a propósito. Falta:
@@ -418,10 +514,13 @@ multi-SAN** a propósito. Falta:
 docker restart aglabs_mosquitto
 ```
 
-**Por qué se dejó a medias:** apuntar el listener a un fichero que no existe
-**impide arrancar mosquitto entero** — se llevaría por delante el 8883 (Shelly
-migrado), el 9001 (dashboard/radar) y el bridge. Con el cert sin copiar, la
-config debe seguir apuntando al multi-SAN.
+**Por qué se dejó a medias en su día:** apuntar el listener a un fichero que no
+existe **impide arrancar mosquitto entero** — se llevaría por delante el 8883
+(Shelly migrado), el 9001 (dashboard/radar) y el bridge. De ahí el orden
+copiar-primero, apuntar-después. Se validó en un contenedor efímero
+(`docker run --rm --volumes-from aglabs_mosquitto ...`) antes de tocar el vivo.
+
+</details>
 
 Verificación después de activar:
 ```bash
@@ -431,6 +530,26 @@ docker logs aglabs_mosquitto --tail 20 | grep -i shellyproem50   # el Shelly deb
 ```
 
 ### Usuarios y ACL para Nanoenvi
+
+> **MIGRADO 2026-09-04.** `CAINAN0010` publica ya en este bróker: conectó a las
+> 10:44:23 UTC negociando **TLSv1.2 / AES256-SHA256** — es decir, **el firmware
+> Nanoenvi SÍ acepta la cadena RSA** que servimos desde el 31-ago. La hipótesis
+> del cert era correcta. Traspaso **sin perder una sola lectura**: 75-80 filas/hora
+> antes y después. No hizo falta `reset`: resuscribió sus topics de control solo.
+>
+> **Estado 2026-08-31:** `nanoenvi_cainan0010` y `diana_iaq` **existen ya en el
+> `passwordfile`**. Hasta esa fecha sus bloques ACL estaban escritos (18-ago)
+> pero **ningún usuario había sido creado** — un intento de conexión habría
+> fallado en la autenticación, antes siquiera de llegar a la ACL. Trampa fácil de
+> pisar: **un bloque en el `aclfile` no implica que el usuario exista.** Los dos
+> ficheros se editan por separado y nada los mantiene sincronizados; al dar de
+> alta un dispositivo hay que tocar **ambos**.
+>
+> Probado en caliente: `diana_iaq` publica en `IAQ_RPC/<uuid>` y recibe por
+> `IAQ_RESP/#`, y `nanoenvi_cainan0010` publica en `IAQ_Measures`. Nota útil:
+> **mosquitto evalúa la ACL por mensaje entregado, no por patrón de
+> suscripción**, así que un cliente suscrito a `IAQ_RESP/#` con ACL
+> `read IAQ_RESP/+` sí recibe — no hace falta ampliar la ACL a `#`.
 
 Topología de topics del firmware (distinta a la de Shelly):
 

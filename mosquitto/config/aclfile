@@ -35,6 +35,12 @@ topic readwrite #
 user nexus_telegraf
 topic read aglabs/radar/#
 topic read $SYS/#
+# Nanoenvi nativo: la medida llega al topic compartido `IAQ_Measures` y la
+# transforma a nexus_iaq el consumer `nexus-iaq-native-aglabs` de Telegraf
+# (sustituye al Node-RED de Tactica). (2026-08-31)
+topic read IAQ_Measures
+# Routers Teltonika migrados: consumer `nexus-router-aglabs`. (2026-09-01)
+topic read router/#
 # Shelly Gen2 migrados a aglabs: Telegraf/Nexus ingiere su medida eléctrica
 # directamente desde shellies2/<cid>/status/* (sin pasar por gadget/<uuid>, que
 # lo generaba la nube Tactica). Necesario para que un Shelly repuntado a este
@@ -77,6 +83,33 @@ topic readwrite shellies2/shellypro3em-34987a673194/#
 
 user shellyproem50-08f9e0e7d058
 topic readwrite shellies2/shellyproem50-08f9e0e7d058/#
+
+# CONSH50050 — Pro 3EM + Relé, Demo A.P. Pablo / Fitoria (RUT COMT241158).
+# Perfil triphase: publica em:0/emdata:0/switch:100/temperature:0 vía script mJS.
+user shellypro3em-2cbcbba64fd4
+topic readwrite shellies2/shellypro3em-2cbcbba64fd4/#
+
+# ── Routers Teltonika migrados desde Tactica ────────────────────────────────
+# El RUT publica su telemetría con el paquete propio `mqtt_pub`
+# (/usr/local/usr/sbin/mqtt_pub, uci `mqtt_pub`), NO con el `data_sender`
+# estándar de Teltonika (que está vacío en estos equipos). Emite
+# `router/<serial>/{signal,uptime,operator,network,wan,connection,temperature,name}`
+# — un valor plano por mensaje — que Nexus ingiere en `nexus_router`.
+#
+# write, no readwrite: el router solo publica, no se suscribe a nada.
+# Anclado al serial, que es el identificador que va en el topic (y el
+# `nexus_device_id` en Boreas es el COMT…, ojo: no coinciden).
+#
+# En Tactica iban en CLARO por el 1883 con `teltonika/teltonika`, credencial
+# compartida por toda la flota. Aquí: TLS 8883 + credencial por equipo.
+
+# COMT241158 — Demo A.P. Pablo / Fitoria
+user rut_6005009079
+topic write router/6005009079/#
+
+# COMT241272 — Demo A.P. Pablo / Parque San Francisco
+user rut_6007130185
+topic write router/6007130185/#
 
 # ── Operador RPC desde aglabs (control de Shellys Gen2 migrados) ────────────
 # Envía RPC a cualquier Shelly (write shellies2/<cid>/rpc) y lee la respuesta.

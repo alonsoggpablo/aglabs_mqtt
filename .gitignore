@@ -7,3 +7,6 @@ mosquitto/config/passwordfile
 
 # Cert LE copiado para el listener 8883 (privkey — NUNCA commitear)
 mosquitto/certs/
+
+# Copias de seguridad de config con hashes de contraseña — NUNCA commitear
+_backups/

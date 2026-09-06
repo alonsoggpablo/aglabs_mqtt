@@ -125,7 +125,66 @@ repo de Boreas (`/root/boreas_rgiot/nginx.conf` y `docker-compose.yml`),
 no aquí — necesitan estar ahí porque `boreas_nginx` es quien termina el
 TLS y sirve el frontend.
 
+## Migración de Shelly desde Tactica
+
+Un Shelly Gen2 migrado conserva su prefijo nativo (`shellies2/<cid>/…`) y
+necesita aquí **una credencial propia** con ACL `readwrite` anclada a ese
+prefijo (`readwrite`, no solo `write`: el firmware se suscribe a `/rpc` y
+`/command/#` para el control).
+
+Equipos en este broker a 2026-08-31:
+
+| Device | Emplazamiento | Perfil | Desde |
+|---|---|---|---|
+| `shellyproem50-08f9e0e7d058` | P. San Francisco | monofásico EM-50 | 14-ago |
+| `shellypro3em-2cbcbba64fd4` | Fitoria | trifásico + relé | 31-ago |
+
+`shellypro3em-34987a673194` tiene credencial creada pero **no está migrado**:
+sigue publicando en Tactica. El estado real de cada equipo es
+`LanDevice.current_mqtt_broker` en Diana, no la presencia de un bloque ACL aquí.
+
+Pasos: crear usuario+ACL → reiniciar broker → `nginx -s reload` →
+`Mqtt.SetConfig` desde Diana → **`Shelly.Reboot` obligatorio** (sin él el
+equipo publica pero no resuscribe los topics de control y el RPC queda mudo).
+Detalle completo y gotchas en [`CLAUDE.md`](CLAUDE.md).
+
+### Routers Teltonika (desde 2026-09-01)
+
+Un emplazamiento se migra **completo**: sensores y también su router. Los RUT
+publican su telemetría (`signal`, `uptime`) y necesitan aquí credencial propia
+con ACL `write router/<serial>/#`.
+
+El paquete que usaban en Tactica (`mqtt_pub`) **no habla TLS**, y este broker
+solo expone el 8883, así que los migrados usan el `data_sender` **nativo** de
+Teltonika, que sí valida nuestro certificado LE contra el almacén de CA del
+propio router. Publican un JSON a `router/<serial>/data` cada 5 minutos.
+
+En Tactica iban en **claro por el 1883 con `teltonika/teltonika`**, credencial
+compartida por toda la flota; aquí van con TLS 1.3 y credencial por equipo.
+
+| Router | Emplazamiento | Desde |
+|---|---|---|
+| `rut_6005009079` (COMT241158) | Fitoria | 01-sep |
+| `rut_6007130185` (COMT241272) | Parque San Francisco | 01-sep |
+
+### El bridge a Tactica ya no espeja `shellies`
+
+Desde el 2026-08-31 el bridge solo copia `gadget/#` y `router/#`. Espejar
+`shellies/#` y `shellies2/#` provocaba **doble ingesta** en Nexus, que consume
+esos topics en los dos brokers a la vez. Además el bridge lleva caído desde
+~11-ago porque el certificado de Tactica caducó y aquí sí se valida; la ingesta
+no depende de él.
+
 ## Certificado RSA para sensores IoT antiguos (Nanoenvi) — 2026-08-18
+
+> **Validado con hardware el 2026-09-04.** El primer Nanoenvi (`CAINAN0010`)
+> conectó aceptando este certificado (TLS 1.2, AES256-SHA256). La hipótesis de
+> que el firmware rechazaba la cadena anterior y aceptaría la RSA era correcta.
+>
+> **Activo desde el 2026-08-31.** El listener 8883 sirve ya el certificado RSA
+> (`mqtt.aglabs.es` → YR1 → Root YR → ISRG Root X1). Los Shelly no se enteraron
+> (van con `ssl_ca:"*"`). Falta aún crear las credenciales de los sensores y el
+> enrutado multi-broker en Diana antes de repuntar ningún Nanoenvi.
 
 Los sensores Nanoenvi validan TLS contra un almacén de CA congelado en firmware y
 **rechazan** el certificado multi-SAN de este broker, porque su cadena pasa por
