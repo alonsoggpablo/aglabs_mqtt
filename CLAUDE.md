@@ -482,6 +482,16 @@ Profundidad 3, RSA, **sin pasar por ISRG Root X2** — exactamente el objetivo.
 Caduca el 16-nov-2026; la renovación la cubre el deploy-hook de certbot, que ya
 invoca `sync_certs.sh` (el cual copia ambos lineages).
 
+**Filtro del deploy-hook (2026-09-15, Dharma).** certbot ejecuta **todos** los
+deploy-hooks tras renovar **cualquier** certificado. Al crearse el lineage
+`aglabs.es` (portal web), `aglabs_mosquitto_certs.sh` habría reiniciado el broker
+—desconectando a los dispositivos— en cada renovación del portal. Ahora filtra por
+`$RENEWED_LINEAGE` y solo actúa con `boreas.aglabs.es` y `mqtt-iaq-rsa`
+(ejecución manual sin la variable → actúa siempre). El hook vive en el host, no en
+este repo. Dharma (`cert_check.py`, cada 6 h) comprueba además que el 8883 sirve el
+mismo certificado que hay en disco; si el hook fallara, solo ejecuta
+`sync_certs.sh --restart` por su cuenta cuando al servido le quedan <14 días.
+
 **Sin impacto en los Shelly:** `shellypro3em-2cbcbba64fd4` reconectó al instante
 negociando `ECDHE-RSA-AES256-GCM-SHA384` (antes ECDSA) — van con `ssl_ca:"*"` y
 no validan. Ningún otro cliente usa 8883: Telegraf y el RPC de Diana entran por

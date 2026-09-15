@@ -32,6 +32,7 @@ Mientras tanto coexiste con la infraestructura de Tactica sin afectarla.
 - **Dashboard propio**: HTML + [MQTT.js](https://github.com/mqttjs/MQTT.js) vía CDN
 - **Red**: `boreas_net` (compartida con el resto del portfolio)
 - **TLS**: termina en `boreas_nginx` (cert Let's Encrypt multi-SAN)
+- **TLS 8883**: cert Let's Encrypt RSA `mqtt-iaq-rsa`, renovado por certbot; un deploy-hook (solo para los certificados del broker) lo copia y reinicia Mosquitto. Dharma vigila que el servido coincida con el renovado. Detalle en CLAUDE.md.
 
 ## Acceso
 
