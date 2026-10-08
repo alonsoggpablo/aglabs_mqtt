@@ -128,9 +128,6 @@ user aglabs_shelly_rpc
 topic write shellies2/+/rpc
 topic read shellies2/+/+/rpc
 topic read shellies2/+/online
-# Diana lee el operador de red de los routers migrados (mqtt_inventory_router_operator).
-# Solo lectura de la hoja fija `data`. (2026-10-08)
-topic read router/+/data
 
 # ── Sensores Nanoenvi (Envira) — IAQ ────────────────────────────────────────
 # Preparado el 2026-08-18 para el piloto de migración desde Tactica.
