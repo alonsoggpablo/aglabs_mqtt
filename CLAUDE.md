@@ -10,8 +10,17 @@ se citan explícitamente como acoplamientos (`/root/boreas_rgiot/nginx.conf`,
 `/root/nexus/.env`, `/root/ag` para el card).
 
 Las reglas globales de `/root/CLAUDE.md` aplican siempre (en particular regla #1
-sobre nombres de servicio docker en `boreas_net` y regla #4 sobre resolver
-dinámico en vhosts).
+sobre nombres de servicio docker en `boreas_net`, regla #4 sobre resolver
+dinámico en vhosts y **regla #9: la config del bróker se aplica SOLO con
+`/root/.aglabs/mosquitto_apply.sh`**).
+
+> ⛔ **Cualquier cambio en `mosquitto/config/` o `mosquitto/certs/` se aplica con
+> `/root/.aglabs/mosquitto_apply.sh reload` (aclfile, passwordfile) o
+> `… restart` (mosquitto.conf, conf.d/, certs/). Nunca `docker kill --signal=HUP`,
+> `docker restart` ni `docker compose restart` a mano** — un hook de Claude Code
+> los deniega. El script valida en un bróker efímero, aplica, comprueba el log y,
+> si algo falla, restaura la última config buena y avisa por Telegram. Ver
+> §"Incidente 2026-10-08".
 
 ## Por qué existe
 
@@ -238,15 +247,9 @@ user radar_iot_002
 topic write aglabs/radar/concejo_gijon_paso_uria_12/radar_iot_002/#
 EOF
 
-# 3. Owner+perms (Edit/Write resetean a root:root — gotcha conocido)
-chown 1883:1883 /root/aglabs_mqtt/mosquitto/config/{aclfile,passwordfile}
-chmod 0600       /root/aglabs_mqtt/mosquitto/config/{aclfile,passwordfile}
-
-# 4. Reiniciar bróker Y reload nginx (gotcha #6 de §Gotchas: tras restart de
-#    aglabs_mosquitto, los publishers WSS se rechazan en silencio hasta que
-#    nginx se entera de que el upstream se reinició).
-docker restart aglabs_mosquitto
-docker exec boreas_nginx nginx -s reload
+# 3+4. Aplicar: normaliza owner/perms (Edit/Write los dejan root:600), valida,
+#      recarga sin desconectar a nadie y revierte si falla.
+/root/.aglabs/mosquitto_apply.sh reload
 
 # 5. Devolver al agente radar_iot el password ($NEW_PWD) para bridge/.env
 ```
@@ -373,9 +376,7 @@ printf '\nuser %s\ntopic readwrite shellies2/%s/#\n' "$CID" "$CID" >> mosquitto/
 echo "GUARDA: $CID -> $PW"     # se le pasa al device en el Mqtt.SetConfig (lado Diana)
 
 # Al terminar el bloque (una sola vez):
-chown 1883:1883 mosquitto/config/{passwordfile,aclfile}
-chmod 0600       mosquitto/config/{passwordfile,aclfile}
-docker restart aglabs_mosquitto && sleep 3 && docker exec boreas_nginx nginx -s reload
+/root/.aglabs/mosquitto_apply.sh reload     # owner/perms + validación + recarga
 ```
 
 - **Guardar cada `$CID:$PW`**: la contraseña se necesita en el `Mqtt.SetConfig`
@@ -498,7 +499,7 @@ no validan. Ningún otro cliente usa 8883: Telegraf y el RPC de Diana entran por
 1883 interno, el dashboard por WSS 443.
 
 **Vuelta atrás** (30 s): cambiar las dos líneas del listener a
-`fullchain.pem`/`privkey.pem` y `docker restart aglabs_mosquitto`.
+`fullchain.pem`/`privkey.pem` y `/root/.aglabs/mosquitto_apply.sh restart`.
 
 **Lo que este cert NO resuelve:** que la cadena sea ahora la "correcta" es una
 hipótesis razonada a partir de lo que sí acepta Tactica, **no una certeza**. El
@@ -638,8 +639,10 @@ migrar los dispositivos a este broker en vez de depender del espejo.
 
 ```bash
 cd /root/aglabs_mqtt && docker compose up -d        # arrancar
-cd /root/aglabs_mqtt && docker compose restart      # reiniciar todo
-docker restart aglabs_mosquitto                     # solo bróker
+/root/.aglabs/mosquitto_apply.sh reload            # tras tocar aclfile/passwordfile
+/root/.aglabs/mosquitto_apply.sh restart           # tras tocar mosquitto.conf/conf.d/certs
+/root/.aglabs/mosquitto_apply.sh check             # solo validar
+docker start aglabs_mosquitto                      # levantarlo si está parado
 docker logs aglabs_mosquitto --tail=30              # estado bridge
 
 # verificar que llegan mensajes desde Tactica vía bridge
@@ -653,8 +656,8 @@ curl -i --http1.1 -u pablo:<pwd> \
   https://mqtt.aglabs.es/mqtt   # → 101 Switching Protocols
 ```
 
-Tras editar `mosquitto.conf` o `bridge.conf` hace falta **restart** del
-contenedor (no hay reload-on-edit). Si solo cambias compose o el bind-mount,
+Tras editar `mosquitto.conf` o `bridge.conf` hace falta **restart**
+(`mosquitto_apply.sh restart`, que además recarga nginx). Si solo cambias compose o el bind-mount,
 `docker compose up -d` detecta y recrea lo necesario.
 
 Tras editar `/root/boreas_rgiot/nginx.conf` (para tocar el vhost
@@ -738,3 +741,42 @@ reload no basta).
 
 Contexto histórico completo en la conversación del agente Claude del
 2026-05-16 (despliegue inicial Mosquitto + bridge + MQTTX + dashboard).
+
+
+## Incidente 2026-10-08 — bróker caído 2 h 45 min por un aclfile ilegible
+
+**Qué pasó.** El agente de Diana añadió `topic read router/+/data` al bloque de
+`aglabs_shelly_rpc` (para leer el operador de red de los routers migrados) con la
+herramienta Edit, que **reescribió el fichero como `root:600`**. Recargó con
+`docker kill --signal=HUP aglabs_mosquitto`; mosquitto (uid 1883) no pudo abrir
+el ACL y **terminó**. Docker **no** lo reinició pese a `restart: unless-stopped`:
+un `docker kill` cuenta como parada manual. Caído de 12:02 a 14:47 (GMT+1), sin
+ingesta de los Shelly, routers y Nanoenvi migrados, y **sin ninguna alerta**. El
+gotcha de permisos ya estaba en la §Usuarios de este fichero; el agente no lo
+leyó antes de tocar este proyecto.
+
+**Defensas (todas probadas):**
+
+| Capa | Dónde | Qué hace |
+|---|---|---|
+| Aplicación segura | `/root/.aglabs/mosquitto_apply.sh` | normaliza perms → valida en mosquitto efímero (`--network none`, sin `conf.d/`) → aplica (SIGHUP por `docker exec`) → busca `Error` en el log → si falla, restaura `last_good`, recarga/reinicia y avisa por Telegram |
+| Hook PreToolUse | `/root/.aglabs/hooks/guard_mosquitto_bash.sh` | deniega `docker kill/restart/stop/rm` y `compose restart/up/down` sobre el bróker |
+| Hook PostToolUse | `/root/.aglabs/hooks/fix_mosquitto_perms.sh` | devuelve a 1883 cualquier fichero de `mosquitto/` editado y recuerda aplicarlo |
+| Alerta | Dharma `AglabsMosquittoDown` | crítico a Telegram si el contenedor falta ≥2 min (comprobada con los datos del incidente) |
+| Renovación de cert | `scripts/sync_certs.sh --restart` | ya no hace `docker restart` directo: pasa por el script |
+
+**Tres hallazgos de las pruebas que conviene no olvidar:**
+
+1. **Con un comodín inválido en el ACL (`foo/+bar`) mosquitto NO siempre se para
+   al recargar**: sigue vivo sin haber cargado el ACL nuevo. Comprobar solo "está
+   corriendo" da un falso OK — hay que mirar el log en busca de `Error`.
+2. **`docker logs … | grep -q` bajo `set -o pipefail` oculta el error**: `grep -q`
+   cierra la tubería al encontrarlo, `docker logs` muere por SIGPIPE y la tubería
+   devuelve fallo. Leer el log a una variable y buscar ahí.
+3. **Durante el bucle de reinicio, `docker exec` falla** ("is restarting"): la
+   recuperación tiene que caer a `docker restart`.
+
+Copias en `/root/.aglabs/mosquitto_backups/` (`last_good` + últimos 20 intentos).
+Las pruebas de marcha atrás se hacen contra un contenedor desechable con
+`MOSQ_CONTAINER`/`MOSQ_BASE`/`MOSQ_BK_ROOT`, `MOSQ_NO_ALERT=1` y
+`MOSQ_TEST_SKIP_VALIDATE=1` — **nunca contra el bróker real**.

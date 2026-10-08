@@ -24,7 +24,11 @@ topic readwrite #
 #   user radar_iot_<NNN>
 #   topic write aglabs/radar/<site_slug>/radar_iot_<NNN>/#
 #
-# Tras editar este fichero: docker restart aglabs_mosquitto.
+# Tras editar este fichero: /root/.aglabs/mosquitto_apply.sh reload
+# (valida en un bróker efímero, recarga y revierte si falla). NUNCA
+# `docker kill --signal=HUP` ni `docker restart` a mano: el 2026-10-08 este
+# fichero quedó root:600, mosquitto (uid 1883) no pudo leerlo y el bróker
+# estuvo caído 2 h 45 min.
 
 # radar_iot_001 — desplegado en concejo Oviedo, paso peatones c/ Independencia 3
 # ── nexus_telegraf — subscriber para volcar a hypertables nexus_* ──────
@@ -124,6 +128,9 @@ user aglabs_shelly_rpc
 topic write shellies2/+/rpc
 topic read shellies2/+/+/rpc
 topic read shellies2/+/online
+# Diana lee el operador de red de los routers migrados (mqtt_inventory_router_operator).
+# Solo lectura de la hoja fija `data`. (2026-10-08)
+topic read router/+/data
 
 # ── Sensores Nanoenvi (Envira) — IAQ ────────────────────────────────────────
 # Preparado el 2026-08-18 para el piloto de migración desde Tactica.

@@ -49,8 +49,7 @@ fi
 echo "certs copiados a $DEST (owner 1883:1883)"
 
 if [[ "${1:-}" == "--restart" ]]; then
-  docker restart aglabs_mosquitto
-  # Gotcha #6: tras restart del broker, nginx cachea el upstream WSS muerto.
-  docker exec boreas_nginx nginx -s reload || true
-  echo "aglabs_mosquitto reiniciado + nginx recargado"
+  # Valida en un bróker efímero, reinicia, recarga nginx (gotcha #6) y revierte
+  # si no arranca (Regla #9 de /root/CLAUDE.md, incidente 2026-10-08).
+  /root/.aglabs/mosquitto_apply.sh restart
 fi

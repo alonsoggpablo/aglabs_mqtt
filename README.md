@@ -90,9 +90,12 @@ ventana de reloj, verificación) vive en el lado Diana:
 ## Operación rápida
 
 ```bash
-# arrancar / reiniciar
-docker compose up -d
-docker compose restart
+# aplicar cambios de config (ÚNICA vía: valida, aplica y revierte si falla)
+/root/.aglabs/mosquitto_apply.sh reload    # aclfile / passwordfile
+/root/.aglabs/mosquitto_apply.sh restart   # mosquitto.conf / conf.d / certs
+
+# levantar si está parado
+docker start aglabs_mosquitto
 
 # logs
 docker logs aglabs_mosquitto --tail=50
@@ -101,6 +104,10 @@ docker logs aglabs_mqttx --tail=20
 # verificar bridge desde Tactica (debe ver mensajes en pocos segundos)
 docker exec aglabs_mosquitto mosquitto_sub -h 127.0.0.1 -t '#' -W 5 -v | head -20
 ```
+
+> **No reiniciar ni recargar el bróker a mano.** El 2026-10-08 una recarga con el
+> `aclfile` ilegible lo tuvo 2 h 45 min caído. Detalle en `CLAUDE.md`
+> §"Incidente 2026-10-08".
 
 ## Ficheros
 
