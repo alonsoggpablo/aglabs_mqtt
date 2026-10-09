@@ -128,11 +128,11 @@ Si se redespliega en otra máquina:
 
 ## Auth y exposición pública
 
-- **Mosquitto**: `per_listener_settings true`, ambos listeners (1883 TCP y
-  9001 WS) con `listener_allow_anonymous true` + `password_file` + `acl_file`.
-  Coexisten anónimos (broad readwrite, preserva dashboard auto-connect y
-  bridge a Tactica) con usuarios autenticados de ACL estricta (publishers
-  AGlabs-nativos, subscriber de Telegraf). Detalle de usuarios y políticas
+- **Mosquitto**: `per_listener_settings true`, los tres listeners con
+  `password_file` + `acl_file`. **Solo el 1883 (interno, `boreas_net`) admite
+  anónimos** (`readwrite #`); el **9001 los cerró el 2026-10-09** y el 8883 nunca
+  los admitió. Ver §"Anónimos cerrados en el 9001". El resto son usuarios
+  autenticados de ACL estricta (publishers AGlabs-nativos, subscriber de Telegraf). Detalle de usuarios y políticas
   en §"Usuarios MQTT (password_file + ACL)". Los listeners 1883/9001 no se
   publican al host — solo accesibles desde `boreas_net`; el 9001 se expone al
   exterior vía proxy nginx en `wss://mqtt.aglabs.es/mqtt`. **El listener 8883
@@ -215,7 +215,8 @@ autenticado.
 | `shellypro3em-34987a673194` | Publisher — Shelly Pro 3EM DEMO Pablo Oviedo (piloto, en Tactica todavía) | `readwrite shellies2/shellypro3em-34987a673194/#` |
 | `shellyproem50-08f9e0e7d058` | Publisher — Shelly Pro EM-50 CONSH60134 DEMO A.P. (**migrado a aglabs 2026-08-14**) | `readwrite shellies2/shellyproem50-08f9e0e7d058/#` |
 | `aglabs_shelly_rpc` | Operador RPC — envía comandos a Shellys Gen2 migrados y lee respuestas | `write shellies2/+/rpc`, `read shellies2/+/+/rpc`, `read shellies2/+/online` |
-| `*` (anónimo) | Legacy: dashboard, MQTTX Web, bridge a Tactica | `readwrite #` |
+| `rg_shelly` | Publisher **compartido** — Shellys del pedido nuevo de RG (una sola contraseña, decisión de RG 2026-10-09) | `readwrite shellies2/<cid>/#` **por cada Client ID listado** en su bloque (vacío hasta recibir el listado) |
+| `*` (anónimo) | Solo conexiones internas por el 1883 (pruebas con `docker exec`) | `readwrite #` — el 9001 y el 8883 ya no admiten anónimos |
 
 **Semántica importante de la ACL Mosquitto**: con `password_file` +
 `acl_file` configurados, las reglas `topic …` al margen de cualquier
@@ -742,6 +743,55 @@ reload no basta).
 Contexto histórico completo en la conversación del agente Claude del
 2026-05-16 (despliegue inicial Mosquitto + bridge + MQTTX + dashboard).
 
+
+## Anónimos cerrados en el 9001 y usuario compartido `rg_shelly` (2026-10-09)
+
+**El agujero.** El 9001 admitía anónimos y nginx lo publica en
+`wss://mqtt.aglabs.es/mqtt` **sin basic auth** (a propósito, para los publishers
+paho). Con `readwrite #` para anónimos, **cualquiera en internet podía leer toda
+la telemetría y escribir en `shellies2/<cid>/rpc`, es decir, accionar los relés
+de los Shelly migrados** (los Client ID se ven en los propios topics).
+Comprobado el 2026-10-09 solo leyendo: conexión anónima aceptada y 331 mensajes
+de Shelly en 12 s. Las credenciales por equipo no servían de nada con esa puerta
+abierta.
+
+**Quién lo usaba:** nadie. En el log desde la creación del contenedor
+(2026-07-24) las únicas conexiones anónimas son pruebas locales (`127.0.0.1`,
+`docker exec`) y el sondeo de ese día. El dashboard (`web/dashboard/`) conecta
+en anónimo y **queda sin conexión**: no tiene ni una conexión en 2,5 meses. Si se
+quiere recuperar, darle un usuario de solo lectura (está detrás de basic auth).
+
+**Cambio:** `listener_allow_anonymous false` en el 9001 (`mosquitto.conf`). El
+1883 conserva anónimos porque no sale de `boreas_net`; queda como deuda cerrarlo
+también. Verificado tras aplicar: anónimo por WSS y por 8883 → `Not authorized`;
+Shellys, RUT, LoRaWAN y Telegraf reconectaron; la medida siguió entrando.
+
+**`rg_shelly` — credencial compartida (opción elegida por RG).** RG quiere una
+sola contraseña para todos sus Shellys nuevos. Diseño:
+- **No** `rgiot`/`rgiot`: está publicada en la guía PDF que RG da a los técnicos.
+  Contraseña aleatoria de 32 caracteres en `.secrets/rg_shelly` (0600, gitignored).
+- **No** `pattern readwrite shellies2/%c/#`: los `pattern` aplican a **todos** los
+  usuarios del bróker, así que cualquier credencial de campo (RUT, Pi de radar,
+  Nanoenvi) podría hacerse pasar por un Shelly eligiendo su client_id.
+- **Sí** una línea `topic readwrite shellies2/<cid>/#` por Client ID en el bloque
+  `user rg_shelly`. La contraseña solo sirve para esos equipos y un cid no
+  listado no publica. Riesgo residual asumido: quien tenga la contraseña puede
+  suplantar a cualquier Shelly **de esa lista**.
+- Añadir equipos: una línea por cid (exacto, minúsculas) +
+  `/root/.aglabs/mosquitto_apply.sh reload`. Los Shellys con credencial propia
+  (los migrados) no cambian.
+
+**Arreglo en `mosquitto_apply.sh` que salió de aquí.** El primer `restart` se
+**deshizo solo** aunque la config era buena: la verificación buscaba
+`Error|terminating` en el log y, en un `restart`, siempre encuentra la parada del
+proceso viejo (`… terminating`), el `OpenSSL Error … certificate verify failed`
+del bridge a Tactica (caído desde agosto) y los `disconnected: Protocol error.`
+de los clientes. Con el bridge roto, **todo `restart` volvía atrás**. Ahora
+`broken()` mira solo desde el último `starting` y cuenta como fallo los mensajes
+que **empiezan** por `Error` (como `validate()`). Probado contra un bróker
+desechable con un bridge que falla TLS: restart correcto → aplica; ACL inválido
+(restart y reload) y `mosquitto.conf` inválido → vuelve atrás. Copia previa del
+script en `/root/.aglabs/mosquitto_apply.sh.bak-20261009`.
 
 ## Incidente 2026-10-08 — bróker caído 2 h 45 min por un aclfile ilegible
 

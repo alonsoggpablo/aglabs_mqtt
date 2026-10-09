@@ -48,10 +48,15 @@ Mientras tanto coexiste con la infraestructura de Tactica sin afectarla.
 ## Auth y ACL (desde 2026-05-28)
 
 El bróker autentica clientes MQTT-nativos con `password_file` + `acl_file`
-en ambos listeners (TCP 1883, WS 9001), conviviendo con tráfico anónimo:
+en los tres listeners (TCP 1883, WS 9001, TLS 8883):
 
-- **Anónimos**: `readwrite #` — preserva el bridge a Tactica, el dashboard
-  con auto-connect y los clientes ad-hoc desde MQTTX Web.
+- **Anónimos**: solo por el 1883 interno (`boreas_net`). **Desde el 2026-10-09 el
+  WebSocket público (`wss://mqtt.aglabs.es/mqtt`) exige usuario**: antes admitía
+  anónimos con permiso de escritura, y cualquiera podía mandar órdenes a los
+  relés. El dashboard anónimo deja de conectar (no se usaba).
+- **Shellys nuevos de RG (`rg_shelly`)**: una contraseña compartida, como pidió
+  RG, pero limitada a la lista de Client ID de su pedido (una línea por equipo).
+  No es `rgiot`.
 - **Publishers autenticados** (`radar_iot_NNN`, futuros Shellys nativos):
   ACL estricta anclada a `aglabs/radar/<site_slug>/<sensor_id>/#`.
   El `#` final cubre los 4 suffixes del wrapper (`track`, `event`, `state`,
@@ -66,6 +71,7 @@ en ambos listeners (TCP 1883, WS 9001), conviviendo con tráfico anónimo:
   y lee sus respuestas. El peticionario usa `src=shellies2/<cid>/<suf>` para
   que la respuesta caiga dentro del prefijo del device.
 
+Detalle del cierre de anónimos y de `rg_shelly` en [CLAUDE.md §"Anónimos cerrados en el 9001"](CLAUDE.md).
 Detalle de cómo añadir un publisher nuevo, la migración Shelly→aglabs, el
 usuario RPC y las trampas (comodines de ACL, validación sin tumbar el bróker)
 en [CLAUDE.md §"Usuarios MQTT"](CLAUDE.md).
@@ -83,7 +89,7 @@ ventana de reloj, verificación) vive en el lado Diana:
 | Listener | Puerto | Expuesto al host | Para qué |
 |----------|--------|------------------|----------|
 | Mosquitto TCP | 1883 | NO (solo `boreas_net`) | Clientes internos (Telegraf, Cortex, …) |
-| Mosquitto WebSockets | 9001 | NO (solo `boreas_net`) | Browser y publishers WSS vía proxy nginx `/mqtt` |
+| Mosquitto WebSockets | 9001 | NO (solo `boreas_net`) | Publishers WSS vía proxy nginx `/mqtt` — **exige usuario** desde 2026-10-09 |
 | nginx HTTPS | 443 | sí (vhost `mqtt.aglabs.es`) | UI (basic auth) + `/mqtt` WS proxy (auth MQTT-nativa) |
 | Mosquitto TLS para dispositivos | 8883 | **sí (firewall abierto, en producción)** | Entrada de Shelly Gen2 reconfigurados (MQTT-TLS nativo, sin nginx — los Shelly no hablan WSS). Cert LE copiado con `scripts/sync_certs.sh`; un usuario MQTT por Shelly con ACL `readwrite shellies2/<cid>/#`. Primer device productivo migrado 2026-08-14. Detalle en CLAUDE.md §"Listener 8883 TLS nativo (Shellys)". |
 

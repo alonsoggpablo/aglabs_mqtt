@@ -10,3 +10,6 @@ mosquitto/certs/
 
 # Copias de seguridad de config con hashes de contraseña — NUNCA commitear
 _backups/
+
+# Contraseñas en claro de usuarios compartidos (rg_shelly) — NUNCA commitear
+.secrets/

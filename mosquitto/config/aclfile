@@ -5,11 +5,12 @@
 # Los bloques "user <nombre>" aplican EXCLUSIVAMENTE a ese usuario (no heredan
 # las reglas del nivel superior).
 #
-# Política actual: tráfico anónimo conserva acceso amplio para no romper el
-# dashboard (web/dashboard/index.html, conexión WSS sin credenciales), MQTTX
-# Web y el bridge a Tactica. Cada usuario nuevo nace con permisos mínimos.
+# Política actual: desde 2026-10-09 los anónimos SOLO entran por el 1883, que no
+# sale de boreas_net (el 9001/WSS público y el 8883 exigen usuario). La regla de
+# abajo aplica únicamente a esas conexiones internas. Cada usuario nuevo nace con
+# permisos mínimos.
 
-# ── Anónimos: full read/write (legacy + dashboard auto-connect) ────────
+# ── Anónimos (solo 1883 interno): full read/write ──────────────────────
 topic readwrite #
 
 # ── PATRÓN CANÓNICO para publishers radar_iot_NNN ──────────────────────
@@ -165,3 +166,11 @@ user diana_iaq
 topic read  IAQ_Measures
 topic write IAQ_RPC/+
 topic read  IAQ_RESP/+
+
+# ── Shellys del pedido nuevo de RG — credencial COMPARTIDA (2026-10-09) ─────
+# RG pidió una sola contraseña para todos sus Shellys nuevos. En vez de abrir
+# `shellies2/#`, cada Client ID se lista aquí: la credencial solo sirve para
+# esos equipos y ningún otro usuario gana permisos. Añadir uno = una línea +
+# `/root/.aglabs/mosquitto_apply.sh reload`. Client ID EXACTO, en minúsculas.
+# Contraseña en /root/aglabs_mqtt/.secrets/rg_shelly (fuera de git).
+user rg_shelly
