@@ -57,6 +57,10 @@ en los tres listeners (TCP 1883, WS 9001, TLS 8883):
 - **Shellys nuevos de RG (`rg_shelly`)**: una contraseña compartida, como pidió
   RG, pero limitada a la lista de Client ID de su pedido (una línea por equipo).
   No es `rgiot`.
+  Para no configurarlo a mano, `scripts/make_provision_script.py` genera un
+  script de aprovisionamiento (uno para todo el pedido) que deja el MQTT del
+  equipo listo y desaparece tras el reinicio. Lleva la contraseña: se entrega
+  por canal privado. Detalle en [CLAUDE.md](CLAUDE.md).
 - **Publishers autenticados** (`radar_iot_NNN`, futuros Shellys nativos):
   ACL estricta anclada a `aglabs/radar/<site_slug>/<sensor_id>/#`.
   El `#` final cubre los 4 suffixes del wrapper (`track`, `event`, `state`,

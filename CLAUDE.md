@@ -781,6 +781,27 @@ sola contraseña para todos sus Shellys nuevos. Diseño:
   `/root/.aglabs/mosquitto_apply.sh reload`. Los Shellys con credencial propia
   (los migrados) no cambian.
 
+**Script de aprovisionamiento `mqtt-provision` (2026-10-09).** Para que los
+técnicos de Shelly no escriban a mano servidor, usuario, contraseña ni prefijo
+(los listados de RG traían mayúsculas, espacios y prefijos mal puestos):
+- Plantilla sin secretos en `scripts/mqtt-provision.js.tmpl`; el fichero con la
+  contraseña se genera con `python3 scripts/make_provision_script.py rg_shelly`
+  → `.secrets/mqtt-provision-rg_shelly.js` (0600, gitignored). **Un solo fichero
+  para todo el pedido**: cada equipo lee su Client ID de `Shelly.getDeviceInfo().id`
+  y monta `shellies2/<id>`.
+- Al ejecutarse: `MQTT.SetConfig` completo (servidor, `rg_shelly`, contraseña,
+  `ssl_ca:"*"`, `client_id`, `topic_prefix`, `rpc_ntf`/`status_ntf` false,
+  control y RPC on) → se renombra `mqtt-provision` con `enable:false` →
+  `Shelly.Reboot`. Si ya estaba configurado, no reinicia y se para.
+- **No se borra a sí mismo** (la API de Shelly no documenta que un script en
+  marcha pueda hacerlo). Lo borra el **limitador ≥ 1.6.2** al arrancar, en cuanto
+  lo ve parado. Diana no lee ni guarda nunca el código de un script llamado
+  `mqtt-provision` (lleva la contraseña).
+- Se entrega **por canal privado**, nunca por el enlace público de Diana.
+- Probado solo con un Shelly simulado (Node): **falta la prueba en un equipo
+  real** antes de dárselo a Shelly. El Client ID tiene que estar en el bloque
+  `rg_shelly` del aclfile antes de que el equipo conecte.
+
 **Arreglo en `mosquitto_apply.sh` que salió de aquí.** El primer `restart` se
 **deshizo solo** aunque la config era buena: la verificación buscaba
 `Error|terminating` en el log y, en un `restart`, siempre encuentra la parada del

@@ -1,0 +1,56 @@
+// mqtt-provision 1.0.0
+// Configura el MQTT del equipo para publicar en mqtt.aglabs.es y lo reinicia.
+// Uso en fabrica: cargarlo como script con el nombre "mqtt-provision" y pulsar
+// Play UNA vez (NO marcar "Run on startup"). Tras el reinicio, el limitador
+// shelly-mqtt-limit (>= 1.6.2) borra este script, que lleva la contrasena.
+// El mismo fichero sirve para todos los equipos: el Client ID y el prefijo los
+// toma cada equipo de su propio firmware.
+let SERVER = "mqtt.aglabs.es:8883";
+let USER = "@@USER@@";
+let PASS = "@@PASS@@";
+
+let ID = Shelly.getDeviceInfo().id;
+let PREFIX = "shellies2/" + ID;
+let ME = Shelly.getCurrentScriptId();
+
+// Nombre fijo y sin arranque automatico: asi el limitador lo encuentra y lo
+// borra, y un reinicio no lo vuelve a ejecutar.
+function retireSelf(then) {
+  Shelly.call("Script.SetConfig",
+    {id: ME, config: {name: "mqtt-provision", enable: false}},
+    function () { if (then) then(); });
+}
+
+let cur = Shelly.getComponentConfig("MQTT");
+if (cur.enable && cur.server === SERVER && cur.user === USER &&
+    cur.topic_prefix === PREFIX) {
+  print("mqtt-provision: " + ID + " ya configurado");
+  // Sin reinicio: se para para que el limitador lo borre ya (si el firmware
+  // no deja pararse a si mismo, lo borra tras el proximo reinicio).
+  retireSelf(function () { Shelly.call("Script.Stop", {id: ME}); });
+} else {
+  Shelly.call("MQTT.SetConfig", {config: {
+      enable: true,
+      server: SERVER,
+      user: USER,
+      pass: PASS,
+      ssl_ca: "*",
+      client_id: ID,
+      topic_prefix: PREFIX,
+      rpc_ntf: false,
+      status_ntf: false,
+      use_client_cert: false,
+      enable_control: true,
+      enable_rpc: true
+    }},
+    function (res, err, msg) {
+      if (err !== 0) {
+        print("mqtt-provision: ERROR " + JSON.stringify(err) + " " + msg);
+        return;
+      }
+      print("mqtt-provision: " + ID + " configurado, reiniciando");
+      retireSelf(function () {
+        Shelly.call("Shelly.Reboot", {delay_ms: 2000});
+      });
+    });
+}
