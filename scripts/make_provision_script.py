@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
 Genera el script de aprovisionamiento MQTT para Shellys (`mqtt-provision`) con
-la contraseña de un usuario compartido, a partir de `mqtt-provision.js.tmpl`.
+la contraseña de un usuario compartido, a partir de la plantilla de Diana
+(`/root/diana/routers/shelly_scripts/provision/mqtt-provision.js.tmpl`).
+Normalmente basta con descargarlo de Diana (Scripts Shelly → Aprovisionamiento,
+solo staff); este generador queda para la línea de comandos.
 
     python3 scripts/make_provision_script.py rg_shelly
     → .secrets/mqtt-provision-rg_shelly.js  (0600, fuera de git)
@@ -15,7 +18,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TEMPLATE = ROOT / 'scripts' / 'mqtt-provision.js.tmpl'
+# Fuente única de la plantilla: Diana (que también la sirve al staff).
+TEMPLATE = Path('/root/diana/routers/shelly_scripts/provision/mqtt-provision.js.tmpl')
 
 
 def main():

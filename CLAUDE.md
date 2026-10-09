@@ -784,8 +784,13 @@ sola contraseña para todos sus Shellys nuevos. Diseño:
 **Script de aprovisionamiento `mqtt-provision` (2026-10-09).** Para que los
 técnicos de Shelly no escriban a mano servidor, usuario, contraseña ni prefijo
 (los listados de RG traían mayúsculas, espacios y prefijos mal puestos):
-- Plantilla sin secretos en `scripts/mqtt-provision.js.tmpl`; el fichero con la
-  contraseña se genera con `python3 scripts/make_provision_script.py rg_shelly`
+- **Descarga habitual: Diana**, Scripts Shelly → Aprovisionamiento (solo staff,
+  generado al vuelo, con registro). Diana guarda su copia de la contraseña en
+  `/app/db/rg_shelly.secret`: **al rotarla, cambiarla en los dos sitios** (ver
+  `/root/diana/CLAUDE.md §Descarga del aprovisionamiento`).
+- Plantilla sin secretos **en Diana** (`routers/shelly_scripts/provision/
+  mqtt-provision.js.tmpl`, fuente única); por línea de comandos el fichero se
+  genera con `python3 scripts/make_provision_script.py rg_shelly`
   → `.secrets/mqtt-provision-rg_shelly.js` (0600, gitignored). **Un solo fichero
   para todo el pedido**: cada equipo lee su Client ID de `Shelly.getDeviceInfo().id`
   y monta `shellies2/<id>`.
