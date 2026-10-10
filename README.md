@@ -67,8 +67,12 @@ en los tres listeners (TCP 1883, WS 9001, TLS 8883):
   El `#` final cubre los 4 suffixes del wrapper (`track`, `event`, `state`,
   `$health`). El anclaje al `<site>` evita spoofing entre emplazamientos.
 - **Subscriber `nexus_telegraf`**: lee `aglabs/radar/#` para volcar a
-  `nexus_radar`, y `shellies2/#` para los Shelly Gen2 migrados desde Tactica
-  (→ `nexus_electrical`).
+  `nexus_radar`, `aglabs/anpr/#` → `nexus_anpr` (matrículas), y `shellies2/#`
+  para los Shelly Gen2 migrados desde Tactica (→ `nexus_electrical`).
+- **Pasarela ANPR** (`anpr_iot_NNN`, propuesto): mismo patrón que radar — una Pi =
+  una cámara, ACL `write aglabs/anpr/<site>/<cam_id>/#`. Payload estricto
+  `{plate, ts}` (dato personal). Bloque ACL propuesto en CLAUDE.md §ANPR (solo
+  documentación; lo aplica producción).
 - **Shellys Gen2 migrados**: un usuario por device (`shellies2/<cid>/#`). El
   primero productivo, el Pro EM-50 `shellyproem50-08f9e0e7d058` (DEMO A.P.),
   migró el 2026-08-14 con ingesta y control RPC funcionando.

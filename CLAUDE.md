@@ -211,7 +211,8 @@ autenticado.
 | Usuario | Rol | Permisos ACL |
 |---------|-----|--------------|
 | `radar_iot_001` | Publisher — primer sensor del piloto radar_iot (uRAD 60 GHz, RPi en Oviedo c/ Independencia 3) | `write` en `aglabs/radar/concejo_oviedo_paso_independencia_3/radar_iot_001/#` |
-| `nexus_telegraf` | Subscriber — Telegraf vuelca a `nexus_radar` **y** a `nexus_electrical` (Shellys migrados) | `read` en `aglabs/radar/#`, `$SYS/#` y **`shellies2/#`** |
+| `anpr_iot_001` | Publisher — pasarela ANPR Hikvision (una Pi = una cámara; `cam_id == device_id`) — **propuesto, pendiente de alta** | `write` en `aglabs/anpr/<site>/anpr_iot_001/#` (ver §ANPR) |
+| `nexus_telegraf` | Subscriber — Telegraf vuelca a `nexus_radar`, `nexus_electrical` (Shellys) **y** `nexus_anpr` | `read` en `aglabs/radar/#`, **`aglabs/anpr/#`**, `$SYS/#` y `shellies2/#` |
 | `shellypro3em-34987a673194` | Publisher — Shelly Pro 3EM DEMO Pablo Oviedo (piloto, en Tactica todavía) | `readwrite shellies2/shellypro3em-34987a673194/#` |
 | `shellyproem50-08f9e0e7d058` | Publisher — Shelly Pro EM-50 CONSH60134 DEMO A.P. (**migrado a aglabs 2026-08-14**) | `readwrite shellies2/shellyproem50-08f9e0e7d058/#` |
 | `aglabs_shelly_rpc` | Operador RPC — envía comandos a Shellys Gen2 migrados y lee respuestas | `write shellies2/+/rpc`, `read shellies2/+/+/rpc`, `read shellies2/+/online` |
@@ -257,6 +258,47 @@ EOF
 
 **Cómo añadir un subscriber** (p.ej. Cortex anomaly detector lee radar):
 crear bloque `user cortex_radar_consumer` con `topic read aglabs/radar/#`.
+
+### ANPR IoT — pasarela de matrículas Hikvision (propuesto 2026-10-10)
+
+Bloque de ACL **propuesto** para la pasarela ANPR (repo `anpr_iot`, provisión por
+Atlas kind `anpr_iot`). **Solo documentación** — producción lo aplica con
+`/root/.aglabs/mosquitto_apply.sh reload`; este repo no toca `aclfile`/`passwordfile`
+desde aquí.
+
+Mismo patrón canónico que radar: **una Pi = una cámara**, así que el `device_id`
+coincide con el `cam_id` y la ACL se ancla a `<site>/<cam_id>` con un solo `#` (cubre
+`plate` y `$health` retained/LWT). Anclar al par `site/cam` evita el spoofing del
+`<site>` igual que en radar. (El brief inicial proponía un ancla amplia
+`aglabs/anpr/<site>/#`; se usa la per-cámara por coherencia con el resto del parque y
+con el contrato de la pasarela — más restrictiva.)
+
+```bash
+# 1. Password del publisher (32+ chars) — se entrega a Atlas, que lo mete en el
+#    secrets store y lo materializa en el .env del gateway en la Pi.
+NEW_PWD=$(openssl rand -base64 36 | tr -d '\n/+=' | cut -c1-40)
+docker exec aglabs_mosquitto mosquitto_passwd -b /mosquitto/config/passwordfile anpr_iot_001 "$NEW_PWD"
+
+# 2. Bloque ACL del publisher — usa el site_slug (== ANPR_SITE_ID) y el cam_id
+#    (== device_id == ANPR_CAM_ID == client_id == usuario MQTT).
+cat >> /root/aglabs_mqtt/mosquitto/config/aclfile <<'EOF'
+
+user anpr_iot_001
+topic write aglabs/anpr/rg_sede/anpr_iot_001/#
+EOF
+
+# 3. Ampliar la ACL del subscriber nexus_telegraf para que ingiera las matrículas.
+#    Añadir esta línea DENTRO del bloque `user nexus_telegraf` (no al nivel global):
+#        topic read aglabs/anpr/#
+
+# 4. Aplicar (normaliza owner/perms, valida, recarga, revierte si falla).
+/root/.aglabs/mosquitto_apply.sh reload
+```
+
+> **Matrícula = dato personal.** El payload de `plate` es estricto `{plate, ts}` y el
+> publisher es **publish-only**, anclado a su `<site>/<cam_id>`. El consumidor es
+> `nexus_telegraf` (vuelca a `nexus_anpr`). La retención aguas abajo (RGPD) la decide
+> el responsable del tratamiento — ver `nexus` §ANPR.
 
 ### Migración real de un Shelly Gen2 a aglabs — ingesta + RPC (2026-08-14)
 
