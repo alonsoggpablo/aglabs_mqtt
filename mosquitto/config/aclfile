@@ -39,6 +39,9 @@ topic readwrite #
 # "topic read gadget/#", "topic read router/#" y reiniciar el contenedor.
 user nexus_telegraf
 topic read aglabs/radar/#
+# Pasarelas ANPR (kind anpr_iot de Atlas): `atlas verify` y el sondeo del broker
+# leen su $health con este usuario. (2026-10-13)
+topic read aglabs/anpr/#
 topic read $SYS/#
 # Nanoenvi nativo: la medida llega al topic compartido `IAQ_Measures` y la
 # transforma a nexus_iaq el consumer `nexus-iaq-native-aglabs` de Telegraf
