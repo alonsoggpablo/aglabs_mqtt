@@ -177,3 +177,6 @@ topic read  IAQ_RESP/+
 # `/root/.aglabs/mosquitto_apply.sh reload`. Client ID EXACTO, en minúsculas.
 # Contraseña en /root/aglabs_mqtt/.secrets/rg_shelly (fuera de git).
 user rg_shelly
+
+user anpr_iot_001
+topic write aglabs/anpr/rg_sede/anpr_iot_001/#
