@@ -119,8 +119,8 @@ topic write router/6005009079/#
 user rut_6007130185
 topic write router/6007130185/#
 
-# COMT241273 — Mástil Ctra. L'Arena (Soto del Barco). Preparado 2026-10-14;
-# el RUT aún publica en Tactica hasta configurar su data_sender.
+# COMT241273 — Mástil Ctra. L'Arena (Soto del Barco). Migrado el 2026-10-14
+# (data_sender por TLS; mqtt_pub apagado).
 user rut_6007130186
 topic write router/6007130186/#
 
