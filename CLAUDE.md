@@ -210,7 +210,7 @@ autenticado.
 
 | Usuario | Rol | Permisos ACL |
 |---------|-----|--------------|
-| `radar_iot_001` | Publisher — primer sensor del piloto radar_iot (uRAD 60 GHz, RPi en Oviedo c/ Independencia 3) | `write` en `aglabs/radar/concejo_oviedo_paso_independencia_3/radar_iot_001/#` |
+| `radar_iot_001` | Publisher — primer sensor del piloto radar_iot (uRAD 60 GHz, RPi en Soto del Barco) | `write` en `aglabs/radar/rg_oficinas_centrales/radar_iot_001/#` |
 | `nexus_telegraf` | Subscriber — Telegraf vuelca a `nexus_radar` **y** a `nexus_electrical` (Shellys migrados) | `read` en `aglabs/radar/#`, `$SYS/#` y **`shellies2/#`** |
 | `shellypro3em-34987a673194` | Publisher — Shelly Pro 3EM DEMO Pablo Oviedo (piloto, en Tactica todavía) | `readwrite shellies2/shellypro3em-34987a673194/#` |
 | `shellyproem50-08f9e0e7d058` | Publisher — Shelly Pro EM-50 CONSH60134 DEMO A.P. (**migrado a aglabs 2026-08-14**) | `readwrite shellies2/shellyproem50-08f9e0e7d058/#` |
