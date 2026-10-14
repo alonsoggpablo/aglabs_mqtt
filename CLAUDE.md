@@ -638,6 +638,12 @@ migrar los dispositivos a este broker en vez de depender del espejo.
 
 ## Operación
 
+**Desplegar un cambio de este repo = `git pull --ff-only` y, si cambió la config,
+`mosquitto_apply.sh reload|restart`.** No seguir el mensaje de `agent_wt.sh
+--merge` (`docker compose up -d && docker compose restart web`): aquí no existe
+`web` y reiniciar el bróker a mano viola la Regla #9. Los hooks de git ya
+devuelven los permisos tras el pull (ver §"Incidente 2026-10-08").
+
 ```bash
 cd /root/aglabs_mqtt && docker compose up -d        # arrancar
 /root/.aglabs/mosquitto_apply.sh reload            # tras tocar aclfile/passwordfile

@@ -100,6 +100,8 @@ ventana de reloj, verificación) vive en el lado Diana:
 
 ## Operación rápida
 
+Desplegar: `git pull --ff-only` y, si cambió la config, `mosquitto_apply.sh reload|restart`. Nunca `docker compose up -d`/`restart` sobre el bróker.
+
 ```bash
 # aplicar cambios de config (ÚNICA vía: valida, aplica y revierte si falla)
 /root/.aglabs/mosquitto_apply.sh reload    # aclfile / passwordfile
