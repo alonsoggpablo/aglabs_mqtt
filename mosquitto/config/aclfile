@@ -119,6 +119,11 @@ topic write router/6005009079/#
 user rut_6007130185
 topic write router/6007130185/#
 
+# COMT241273 — Mástil Ctra. L'Arena (Soto del Barco). Preparado 2026-10-14;
+# el RUT aún publica en Tactica hasta configurar su data_sender.
+user rut_6007130186
+topic write router/6007130186/#
+
 # ── Operador RPC desde aglabs (control de Shellys Gen2 migrados) ────────────
 # Envía RPC a cualquier Shelly (write shellies2/<cid>/rpc) y lee la respuesta.
 # CLAVE DEL DISEÑO: el peticionario DEBE poner src=shellies2/<cid>/<suf>, de modo

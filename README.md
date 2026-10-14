@@ -185,6 +185,9 @@ compartida por toda la flota; aquí van con TLS 1.3 y credencial por equipo.
 |---|---|---|
 | `rut_6005009079` (COMT241158) | Fitoria | 01-sep |
 | `rut_6007130185` (COMT241272) | Parque San Francisco | 01-sep |
+| `rut_6007130186` (COMT241273) | Mástil Ctra. L'Arena, Soto del Barco | credencial lista 14-oct; el RUT sigue en Tactica hasta configurar su `data_sender` |
+
+La contraseña de cada router migrado se guarda en `/root/.aglabs/secrets/mqtt_rut_<serial>` (0600). La de los dos primeros solo existe en el propio RUT.
 
 ### El bridge a Tactica ya no espeja `shellies`
 
