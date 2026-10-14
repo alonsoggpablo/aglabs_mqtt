@@ -98,11 +98,13 @@ user shellypro3em-2cbcbba64fd4
 topic readwrite shellies2/shellypro3em-2cbcbba64fd4/#
 
 # ── Routers Teltonika migrados desde Tactica ────────────────────────────────
-# El RUT publica su telemetría con el paquete propio `mqtt_pub`
-# (/usr/local/usr/sbin/mqtt_pub, uci `mqtt_pub`), NO con el `data_sender`
-# estándar de Teltonika (que está vacío en estos equipos). Emite
-# `router/<serial>/{signal,uptime,operator,network,wan,connection,temperature,name}`
-# — un valor plano por mensaje — que Nexus ingiere en `nexus_router`.
+# Los RUT migrados publican con el `data_sender` NATIVO de Teltonika (salida
+# MQTT con TLS al 8883) y una entrada Lua `aglabs_router.lua`: un JSON
+# `{"router":{"signal":…,"uptime":…}}` a `router/<serial>/data` cada 5 min,
+# que Nexus ingiere en `nexus_router`. El `mqtt_pub` de Tactica (un valor plano
+# por mensaje en `router/<serial>/{signal,uptime,…}`) no habla TLS y no migra.
+# Script y receta: /root/diana/routers/teltonika_scripts/ y
+# /root/diana/CLAUDE.md §"Migrar la telemetría de un RUT a aglabs".
 #
 # write, no readwrite: el router solo publica, no se suscribe a nada.
 # Anclado al serial, que es el identificador que va en el topic (y el
