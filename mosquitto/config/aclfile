@@ -31,7 +31,8 @@ topic readwrite #
 # fichero quedó root:600, mosquitto (uid 1883) no pudo leerlo y el bróker
 # estuvo caído 2 h 45 min.
 
-# radar_iot_001 — desplegado en concejo Oviedo, paso peatones c/ Independencia 3
+# radar_iot_001 — RPi del piloto radar_iot, hoy en Soto del Barco (el topic
+# conserva el segmento rg_oficinas_centrales con el que se provisionó)
 # ── nexus_telegraf — subscriber para volcar a hypertables nexus_* ──────
 # Hoy solo suscribe a aglabs/radar/# (radar_iot v1, hypertable nexus_radar).
 # Cuando los Shellys/Nanoenvi/Engelmann migren desde Tactica a este bróker,

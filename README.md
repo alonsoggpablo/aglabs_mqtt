@@ -104,6 +104,10 @@ ventana de reloj, verificación) vive en el lado Diana:
 # aplicar cambios de config (ÚNICA vía: valida, aplica y revierte si falla)
 /root/.aglabs/mosquitto_apply.sh reload    # aclfile / passwordfile
 /root/.aglabs/mosquitto_apply.sh restart   # mosquitto.conf / conf.d / certs
+/root/.aglabs/mosquitto_apply.sh perms     # solo propietario/permisos (lo llama el hook de git tras un pull)
+
+# una vez por clon: hooks de git que devuelven los permisos tras pull/checkout
+git config core.hooksPath scripts/git-hooks
 
 # levantar si está parado
 docker start aglabs_mosquitto

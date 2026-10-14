@@ -643,6 +643,7 @@ cd /root/aglabs_mqtt && docker compose up -d        # arrancar
 /root/.aglabs/mosquitto_apply.sh reload            # tras tocar aclfile/passwordfile
 /root/.aglabs/mosquitto_apply.sh restart           # tras tocar mosquitto.conf/conf.d/certs
 /root/.aglabs/mosquitto_apply.sh check             # solo validar
+/root/.aglabs/mosquitto_apply.sh perms             # solo propietario/permisos, sin tocar el bróker
 docker start aglabs_mosquitto                      # levantarlo si está parado
 docker logs aglabs_mosquitto --tail=30              # estado bridge
 
@@ -840,6 +841,27 @@ leyó antes de tocar este proyecto.
 | Hook PostToolUse | `/root/.aglabs/hooks/fix_mosquitto_perms.sh` | devuelve a 1883 cualquier fichero de `mosquitto/` editado y recuerda aplicarlo |
 | Alerta | Dharma `AglabsMosquittoDown` | crítico a Telegram si el contenedor falta ≥2 min (comprobada con los datos del incidente) |
 | Renovación de cert | `scripts/sync_certs.sh --restart` | ya no hace `docker restart` directo: pasa por el script |
+| Hooks de git | `scripts/git-hooks/` (`core.hooksPath`) | tras `pull`/`merge`/`checkout`/`rebase` en `/root/aglabs_mqtt`, `mosquitto_apply.sh perms` devuelve a 1883:1883 600 lo que git reescribió (2026-10-14) |
+
+**`git pull` también cambia los permisos (2026-10-14).** Al desplegar un cambio
+que solo tocaba comentarios del `aclfile`, `git pull --ff-only` dejó el fichero
+como `root:root 644` (estaba en `1883:1883 600`): git reescribe cada fichero que
+cambia con el usuario que ejecuta el pull y su umask. Con 644 mosquitto aún lo
+lee, pero el passwordfile quedaría legible por todos y un `umask` más estricto
+lo dejaría como el incidente del 08-oct. El hook de Claude Code no lo cubre (solo
+salta con Edit/Write). Por eso el repo trae hooks de git en `scripts/git-hooks/`
+(`post-merge`, y `post-checkout`/`post-rewrite` enlazados) que llaman a
+`mosquitto_apply.sh perms`: **solo** propietario y permisos, sin validar ni
+recargar. Solo actúan en `/root/aglabs_mqtt`; en worktrees y en el VPS2 no hacen
+nada. Hay que activarlos una vez por clon:
+
+```bash
+git -C /root/aglabs_mqtt config core.hooksPath scripts/git-hooks
+```
+
+Un cambio de config que entre por `git pull` **sigue sin aplicarse** hasta pasar
+por `mosquitto_apply.sh reload|restart`; un cambio solo de comentarios no
+necesita recarga.
 
 **Tres hallazgos de las pruebas que conviene no olvidar:**
 

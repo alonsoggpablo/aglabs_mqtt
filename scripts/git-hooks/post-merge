@@ -1,0 +1,15 @@
+#!/bin/sh
+# Hook de git (core.hooksPath = scripts/git-hooks). Tras un pull/merge/checkout
+# git reescribe los ficheros que cambian como root:644, y mosquitto corre como
+# uid 1883: el aclfile y el passwordfile deben ser 1883:1883 600. Esto solo
+# devuelve propietario y permisos; NO valida ni recarga el bróker (un cambio de
+# config sigue exigiendo `mosquitto_apply.sh reload|restart`).
+#
+# Solo actúa en el checkout que sirve el bróker en producción; en cualquier otro
+# sitio (worktrees, el VPS2) no hace nada.
+APPLY=/root/.aglabs/mosquitto_apply.sh
+[ "$(git rev-parse --show-toplevel 2>/dev/null)" = /root/aglabs_mqtt ] || exit 0
+[ -x "$APPLY" ] || exit 0
+"$APPLY" perms >/dev/null 2>&1 \
+  || echo "aviso: no se pudieron normalizar los permisos de mosquitto/ — ejecuta $APPLY perms" >&2
+exit 0
