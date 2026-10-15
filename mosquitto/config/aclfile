@@ -43,6 +43,9 @@ topic read aglabs/radar/#
 # Pasarelas ANPR (kind anpr_iot de Atlas): `atlas verify` y el sondeo del broker
 # leen su $health con este usuario. (2026-10-13)
 topic read aglabs/anpr/#
+# Contadores Zeus (kind zeus_e18 de Atlas): consumer nexus-zeus de Telegraf y
+# verify de Atlas. (2026-10-15)
+topic read aglabs/zeus/#
 topic read $SYS/#
 # Nanoenvi nativo: la medida llega al topic compartido `IAQ_Measures` y la
 # transforma a nexus_iaq el consumer `nexus-iaq-native-aglabs` de Telegraf
