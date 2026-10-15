@@ -191,3 +191,6 @@ user rg_shelly
 
 user anpr_iot_001
 topic write aglabs/anpr/rg_sede/anpr_iot_001/#
+
+user zeus_e18_001
+topic write aglabs/zeus/oficinas_rg/zeus_e18_001/#
