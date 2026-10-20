@@ -310,6 +310,30 @@ aglabs_mosquitto`, probar en efímero:
 -c 'mosquitto -c /mosquitto/config/mosquitto.conf -v & sleep 2; kill %1'` y grepear
 `invalid|error`.
 
+### Shelly Gen1 a aglabs — primer equipo `CONSH3S048` (preparado 2026-10-20)
+
+Los Gen1 (`shellyem3`) no hablan RPC: `set-broker` de Diana no les sirve y el
+cambio de bróker se hace en el propio equipo (WebUI → *Internet & Security* →
+*Advanced - Developer Settings* → MQTT). Lo que pone este repo:
+
+- **Usuario por equipo = su mqtt_id de fábrica**, `shellyem3-<MAC EN MAYÚSCULAS>`
+  (así aparece en los topics reales). `readwrite shellies/<cid>/#` +
+  `read shellies/command` (broadcast `announce`/`update` al que se suscriben
+  todos los Gen1). Contraseña en `.secrets/<cid>` (0600, gitignored).
+- **`nexus_telegraf`**: `read shellies/#`. Los consumers Gen1 de Nexus contra este
+  bróker (emeter, relay, relay/command) llevan `client_id` propios. No hay doble
+  ingesta: el bridge dejó de copiar `shellies/#` el 2026-08-31.
+- **`aglabs_shelly_rpc`**: `write shellies/+/relay/+/command` + `read shellies/#`.
+  Diana manda un Gen1 publicando `on`/`off` en `shellies/<cid>/relay/<n>/command`
+  y confirma por el retained `shellies/<cid>/relay/<n>`. **Sin la línea `write`
+  la orden se descarta en silencio** y la regla de Boreas
+  (`rg_oficina_calefaccion`) creería que manda el relé.
+
+`CONSH3S048` es el 3EM de la calefacción de la sede de RG (`DEMO.- Sede
+Asturias`), sin RUT: está en la LAN de la oficina (`192.168.1.133`), así que
+**no hay canal de rescate remoto** (ni SSH→RUT ni otro Gen2 en esa LAN). El cambio
+y la vuelta atrás se hacen in situ.
+
 ### Routers Teltonika migrados (2026-09-01)
 
 **Regla de alcance (usuario, 2026-09-01): un emplazamiento se migra COMPLETO.**
