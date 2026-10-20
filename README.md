@@ -67,14 +67,19 @@ en los tres listeners (TCP 1883, WS 9001, TLS 8883):
   El `#` final cubre los 4 suffixes del wrapper (`track`, `event`, `state`,
   `$health`). El anclaje al `<site>` evita spoofing entre emplazamientos.
 - **Subscriber `nexus_telegraf`**: lee `aglabs/radar/#` para volcar a
-  `nexus_radar`, y `shellies2/#` para los Shelly Gen2 migrados desde Tactica
-  (→ `nexus_electrical`).
+  `nexus_radar`, y `shellies2/#`/`shellies/#` para los Shelly Gen2/Gen1 migrados desde
+  Tactica (→ `nexus_electrical`).
 - **Shellys Gen2 migrados**: un usuario por device (`shellies2/<cid>/#`). El
   primero productivo, el Pro EM-50 `shellyproem50-08f9e0e7d058` (DEMO A.P.),
   migró el 2026-08-14 con ingesta y control RPC funcionando.
 - **Operador RPC `aglabs_shelly_rpc`**: envía comandos a los Shellys migrados
   y lee sus respuestas. El peticionario usa `src=shellies2/<cid>/<suf>` para
   que la respuesta caiga dentro del prefijo del device.
+  Para los Gen1 migrados publica `on`/`off` en `shellies/<cid>/relay/<n>/command`.
+- **Shellys Gen1 migrados** (`shellyem3`): un usuario por device
+  (`shellies/<cid>/#`, cid con la MAC en mayúsculas). Primero: `CONSH3S048`,
+  la calefacción de la sede de RG (preparado 2026-10-20; el cambio en el equipo
+  se hace in situ).
 
 Detalle del cierre de anónimos y de `rg_shelly` en [CLAUDE.md §"Anónimos cerrados en el 9001"](CLAUDE.md).
 Detalle de cómo añadir un publisher nuevo, la migración Shelly→aglabs, el

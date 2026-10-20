@@ -58,6 +58,9 @@ topic read router/#
 # lo generaba la nube Tactica). Necesario para que un Shelly repuntado a este
 # broker siga apareciendo en nexus_electrical → Boreas. (2026-08-14)
 topic read shellies2/#
+# Shelly Gen1 (shellyem3) migrados a aglabs: emeter, estado y órdenes del relé
+# (consumers nexus-shelly-gen1*-aglabs). Primer equipo: CONSH3S048. (2026-10-20)
+topic read shellies/#
 
 # ── lorawan_ops (ChirpStack) — NS+AS+join LoRaWAN, https://lorawan.aglabs.es ──
 # Dos usuarios del stack /root/lorawan_ops contra este broker compartido:
@@ -143,6 +146,12 @@ user aglabs_shelly_rpc
 topic write shellies2/+/rpc
 topic read shellies2/+/+/rpc
 topic read shellies2/+/online
+# Gen1 (shellyem3) migrados: no hablan RPC. Diana manda el relé publicando
+# on/off en shellies/<cid>/relay/<n>/command y lee la medida y el estado en
+# shellies/<cid>/# (visor y confirmación de la orden). Sin estas dos líneas el
+# bróker descarta la orden EN SILENCIO y la regla de Boreas cree que manda. (2026-10-20)
+topic write shellies/+/relay/+/command
+topic read shellies/#
 
 # ── Sensores Nanoenvi (Envira) — IAQ ────────────────────────────────────────
 # Preparado el 2026-08-18 para el piloto de migración desde Tactica.
@@ -194,3 +203,14 @@ topic write aglabs/anpr/rg_sede/anpr_iot_001/#
 
 user zeus_e18_001
 topic write aglabs/zeus/oficinas_rg/zeus_e18_001/#
+
+# ── Shelly Gen1 migrados desde Tactica ──────────────────────────────────────
+# Un usuario por equipo = su mqtt_id de fábrica (shellyem3-<MAC EN MAYÚSCULAS>).
+# readwrite: publica emeter/relay/online bajo su prefijo y se suscribe a
+# shellies/<cid>/relay/<n>/command y shellies/<cid>/command. Lee además el
+# broadcast shellies/command (announce/update) al que se suscriben todos los Gen1.
+# CONSH3S048 — 3EM de la calefacción de la sede de RG (DEMO.- Sede Asturias),
+# relé mandado por la regla rg_oficina_calefaccion de Boreas. (2026-10-20)
+user shellyem3-BCFF4DFD1D53
+topic readwrite shellies/shellyem3-BCFF4DFD1D53/#
+topic read shellies/command
