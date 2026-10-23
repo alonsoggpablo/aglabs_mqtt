@@ -77,9 +77,6 @@ topic readwrite application/#
 user lorawan_gwbridge
 topic readwrite eu868/#
 
-user radar_iot_001
-topic write aglabs/radar/rg_oficinas_centrales/radar_iot_001/#
-
 # ── Shelly Gen2 migrados desde Tactica (piloto migración broker MQTT) ───────
 # Un usuario por Shelly, ACL anclada a su topic_prefix nativo `shellies2/<cid>`.
 # readwrite (no solo write): el firmware PUBLICA status/online bajo ese prefijo
@@ -198,9 +195,6 @@ topic read  IAQ_RESP/+
 # Contraseña en /root/aglabs_mqtt/.secrets/rg_shelly (fuera de git).
 user rg_shelly
 
-user anpr_iot_001
-topic write aglabs/anpr/rg_sede/anpr_iot_001/#
-
 user zeus_e18_001
 topic write aglabs/zeus/oficinas_rg/zeus_e18_001/#
 
@@ -214,3 +208,9 @@ topic write aglabs/zeus/oficinas_rg/zeus_e18_001/#
 user shellyem3-BCFF4DFD1D53
 topic readwrite shellies/shellyem3-BCFF4DFD1D53/#
 topic read shellies/command
+
+user radar_iot_001
+topic write aglabs/radar/soto_del_barco_01/radar_iot_001/#
+
+user anpr_iot_001
+topic write aglabs/anpr/soto_del_barco_01/anpr_iot_001/#
