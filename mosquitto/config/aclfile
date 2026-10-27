@@ -101,6 +101,11 @@ topic readwrite shellies2/shellyproem50-08f9e0e7d058/#
 user shellypro3em-2cbcbba64fd4
 topic readwrite shellies2/shellypro3em-2cbcbba64fd4/#
 
+# CONSH60202 — Pro EM-50 que sustituye al 3EM Gen1 CONSH3S048 en la calefacción de la
+# sede de RG (RUT COMT241274). Relé switch:0 mandado por la regla Boreas de la oficina. (2026-10-27)
+user shellyproem50-441d64757ebc
+topic readwrite shellies2/shellyproem50-441d64757ebc/#
+
 # ── Routers Teltonika migrados desde Tactica ────────────────────────────────
 # Los RUT migrados publican con el `data_sender` NATIVO de Teltonika (salida
 # MQTT con TLS al 8883) y una entrada Lua `aglabs_router.lua`: un JSON
@@ -203,11 +208,7 @@ topic write aglabs/zeus/oficinas_rg/zeus_e18_001/#
 # readwrite: publica emeter/relay/online bajo su prefijo y se suscribe a
 # shellies/<cid>/relay/<n>/command y shellies/<cid>/command. Lee además el
 # broadcast shellies/command (announce/update) al que se suscriben todos los Gen1.
-# CONSH3S048 — 3EM de la calefacción de la sede de RG (DEMO.- Sede Asturias),
-# relé mandado por la regla rg_oficina_calefaccion de Boreas. (2026-10-20)
-user shellyem3-BCFF4DFD1D53
-topic readwrite shellies/shellyem3-BCFF4DFD1D53/#
-topic read shellies/command
+# (CONSH3S048, el primero, se sustituyó por un Pro EM-50 el 2026-10-27: ver CONSH60202.)
 
 user radar_iot_001
 topic write aglabs/radar/soto_del_barco_01/radar_iot_001/#
