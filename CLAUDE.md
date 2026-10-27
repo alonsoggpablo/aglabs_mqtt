@@ -329,10 +329,16 @@ cambio de bróker se hace en el propio equipo (WebUI → *Internet & Security* �
   la orden se descarta en silencio** y la regla de Boreas
   (`rg_oficina_calefaccion`) creería que manda el relé.
 
-`CONSH3S048` es el 3EM de la calefacción de la sede de RG (`DEMO.- Sede
-Asturias`), sin RUT: está en la LAN de la oficina (`192.168.1.133`), así que
-**no hay canal de rescate remoto** (ni SSH→RUT ni otro Gen2 en esa LAN). El cambio
-y la vuelta atrás se hacen in situ.
+**Los Gen1 no pueden venir a este bróker tal cual (comprobado 2026-10-27).** Su MQTT no tiene
+TLS en ningún firmware (la API Gen1 de Shelly: «Shelly devices do not support secure MQTT
+connections»; `/settings` no tiene parámetro de TLS, tampoco en la 1.14) y aquí desde fuera solo
+se acepta el 8883 con TLS. Hablan con Tactica en claro (`82.223.204.102:1883`). Para traerlos hay
+que abrir un listener público sin TLS (decisión pendiente) o sustituirlos por Gen2.
+
+`CONSH3S048` (el 3EM de la calefacción de la sede de RG) **se sustituyó el 2026-10-27** por el
+Pro EM-50 `CONSH60202` (`shellyproem50-441d64757ebc`, tras el RUT COMT241274), migrado el mismo
+día con `set-broker` + reinicio por el canal de rescate. Su usuario Gen1 se retiró; las líneas
+genéricas de `shellies/#` de `nexus_telegraf` y `aglabs_shelly_rpc` se quedan para futuros Gen1.
 
 ### Routers Teltonika migrados (2026-09-01)
 

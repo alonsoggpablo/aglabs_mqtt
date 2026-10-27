@@ -76,10 +76,9 @@ en los tres listeners (TCP 1883, WS 9001, TLS 8883):
   y lee sus respuestas. El peticionario usa `src=shellies2/<cid>/<suf>` para
   que la respuesta caiga dentro del prefijo del device.
   Para los Gen1 migrados publica `on`/`off` en `shellies/<cid>/relay/<n>/command`.
-- **Shellys Gen1 migrados** (`shellyem3`): un usuario por device
-  (`shellies/<cid>/#`, cid con la MAC en mayúsculas). Primero: `CONSH3S048`,
-  la calefacción de la sede de RG (preparado 2026-10-20; el cambio en el equipo
-  se hace in situ).
+- **Shellys Gen1** (`shellyem3`): sin TLS en MQTT, así que no pueden conectar al 8883.
+  Hay ACL preparada (`shellies/#`) por si se abre un listener sin TLS. El primero previsto,
+  `CONSH3S048`, se sustituyó por un Pro EM-50 (`CONSH60202`, migrado el 2026-10-27).
 
 Detalle del cierre de anónimos y de `rg_shelly` en [CLAUDE.md §"Anónimos cerrados en el 9001"](CLAUDE.md).
 Detalle de cómo añadir un publisher nuevo, la migración Shelly→aglabs, el
