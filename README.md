@@ -81,6 +81,11 @@ en los tres listeners (TCP 1883, WS 9001, TLS 8883):
   `CONSH3S048`, se sustituyó por un Pro EM-50 (`CONSH60202`, migrado el 2026-10-27).
 
 Detalle del cierre de anónimos y de `rg_shelly` en [CLAUDE.md §"Anónimos cerrados en el 9001"](CLAUDE.md).
+
+**Alta automática desde Boreas (2026-11-03).** Al dar de alta un Shelly en Boreas
+(Planta), su Client ID entra solo en la lista de `rg_shelly`; al darlo de baja, sale.
+Lo aplica `scripts/acl_queue.py` (cron cada minuto) con `mosquitto_apply.sh` y deja el
+cambio commiteado. Detalle en [CLAUDE.md §"Cola de altas"](CLAUDE.md).
 Detalle de cómo añadir un publisher nuevo, la migración Shelly→aglabs, el
 usuario RPC y las trampas (comodines de ACL, validación sin tumbar el bróker)
 en [CLAUDE.md §"Usuarios MQTT"](CLAUDE.md).

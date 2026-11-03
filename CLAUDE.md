@@ -844,6 +844,26 @@ técnicos de Shelly no escriban a mano servidor, usuario, contraseña ni prefijo
   real** antes de dárselo a Shelly. El Client ID tiene que estar en el bloque
   `rg_shelly` del aclfile antes de que el equipo conecte.
 
+**Cola de altas desde Boreas — `scripts/acl_queue.py` (2026-11-03).** El bloque
+`rg_shelly` ya no se edita a mano: Boreas deja peticiones `add`/`remove` al dar de alta o
+de baja un Shelly (ver `/root/boreas_rgiot/CLAUDE.md §"Shelly nuevo → bróker"`) y este
+script las aplica.
+- Cron host `* * * * *` con `flock` + `timeout 50s`, log `/var/log/aglabs_acl_queue.log`.
+  Cola en `/root/cortex/anomaly_reports/_broker/` (`requests/`, `state.json`).
+- **Qué puede tocar:** solo líneas `topic readwrite shellies2/<cid>/#` (y su comentario)
+  **dentro de `user rg_shelly`**, con el Client ID validado por
+  `^shelly(pro|plus)[a-z0-9]*-[0-9a-f]{12}$`. Nunca otros usuarios. Un cid con usuario
+  propio (`user shellypro…`, los migrados) queda `propio` y no se toca.
+- Escribe el aclfile **en el sitio** (conserva inodo y dueño 1883), aplica con
+  `mosquitto_apply.sh reload` y, si sale bien, commit + push del aclfile
+  (`acl(auto): …`). Si falla, `git checkout` del aclfile + `perms` y estado `error`.
+- **Si el aclfile tiene cambios sin commitear**, no hace nada y reintenta en la siguiente
+  pasada (las peticiones esperan). Por eso, **al editar el aclfile a mano, commitea
+  enseguida** o la cola se queda parada.
+- `--dry-run` enseña el diff sin escribir. Probado contra una copia del repo con un
+  aplicador falso: alta, alta repetida, usuario propio, petición inválida, baja, fallo
+  del bróker y aclfile con cambios ajenos.
+
 **Arreglo en `mosquitto_apply.sh` que salió de aquí.** El primer `restart` se
 **deshizo solo** aunque la config era buena: la verificación buscaba
 `Error|terminating` en el log y, en un `restart`, siempre encuentra la parada del
