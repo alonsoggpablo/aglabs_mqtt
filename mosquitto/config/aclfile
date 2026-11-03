@@ -199,6 +199,8 @@ topic read  IAQ_RESP/+
 # `/root/.aglabs/mosquitto_apply.sh reload`. Client ID EXACTO, en minúsculas.
 # Contraseña en /root/aglabs_mqtt/.secrets/rg_shelly (fuera de git).
 user rg_shelly
+# CONSH60226 — alta 2026-11-03
+topic readwrite shellies2/shellyproem50-441d64762244/#
 
 user zeus_e18_001
 topic write aglabs/zeus/oficinas_rg/zeus_e18_001/#
