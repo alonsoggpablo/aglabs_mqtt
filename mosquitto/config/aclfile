@@ -184,6 +184,16 @@ topic write IAQ_Measures
 topic read  IAQ_RPC/2907f342-6541-4baf-be62-ec9cabd74a95
 topic write IAQ_RESP/2907f342-6541-4baf-be62-ec9cabd74a95
 
+# Nanoenvi de RG — credencial COMPARTIDA (2026-11-04)
+# Un solo usuario para toda la flota Nanoenvi que se configure contra este
+# bróker (guía r06). La medida va al topic compartido IAQ_Measures; RPC y
+# respuesta abiertos a cualquier uuid porque la credencial es común.
+# Contraseña en /root/aglabs_mqtt/.secrets/rg_nanoenvi (fuera de git).
+user rg_nanoenvi
+topic write IAQ_Measures
+topic read  IAQ_RPC/+
+topic write IAQ_RESP/+
+
 # ── Plano de control IAQ (Diana + Node-RED) ─────────────────────────────────
 # Lee la medida de todos, envía RPC a cualquier uuid y lee sus respuestas.
 # Comodines de nivel completo (`+`), válidos en mosquitto.
