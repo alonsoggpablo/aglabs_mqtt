@@ -241,6 +241,11 @@ Tactica caducó y mosquitto valida la fecha, así que no conecta. Este broker no
 recibe `shellies/#`, `shellies2/#`, `gadget/#` ni `router/#` desde entonces.
 Detalle en CLAUDE.md.
 
+**Nanoenvi de RG (2026-11-04):** usuario compartido `rg_nanoenvi` para toda la flota
+(publica en `IAQ_Measures`, RPC en `IAQ_RPC/+`). No hay que dar de alta nada por
+sensor. Contraseña fuera de git. Detalle en CLAUDE.md §"Credencial compartida
+rg_nanoenvi".
+
 ## Más detalles
 
 - Para detalles operativos (auth, gotchas, lecciones, dependencias cruzadas,

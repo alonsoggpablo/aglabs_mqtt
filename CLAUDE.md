@@ -666,6 +666,34 @@ verificación de *hostname*, no la de caducidad. Hasta que Tactica sirva un
 certificado válido, el bridge no levanta — lo que refuerza el argumento para
 migrar los dispositivos a este broker en vez de depender del espejo.
 
+### Credencial compartida `rg_nanoenvi` (2026-11-04)
+
+Para los Nanoenvi nuevos de RG (los 11 de Brión, CAINAN0409–0419, y los siguientes):
+un solo usuario para toda la flota, como `rg_shelly`. Lo pidió RG para no gestionar una
+credencial por sensor; propuso `rgiot/rgiot` y se descartó por débil (el 8883 está abierto
+a internet y quien la adivinara podría publicar medidas falsas de cualquier sensor).
+
+```
+user rg_nanoenvi
+topic write IAQ_Measures
+topic read  IAQ_RPC/+
+topic write IAQ_RESP/+
+```
+
+- Contraseña en `.secrets/rg_nanoenvi` (fuera de git). Hash añadido al `passwordfile`
+  con `mosquitto_passwd` dentro del contenedor; aplicado con `mosquitto_apply.sh reload`.
+  ACL en el commit `3f0becf`.
+- **Coste aceptado:** al ser común, el RPC no se puede anclar al uuid de cada sensor:
+  con la credencial se leen los comandos de todos. La medida ya era compartida
+  (`IAQ_Measures`), así que eso no cambia.
+- **Nada por equipo.** No hace falta añadir líneas al dar de alta un Nanoenvi nuevo (a
+  diferencia de `rg_shelly`, que lista cada Client ID). La cola `scripts/acl_queue.py`
+  sigue siendo solo para Shelly.
+- Verificado: login TLS con `mosquitto_sub` → CONNACK 0 y SUBACK. Ningún sensor real lo
+  usa todavía.
+- Guía de configuración para instaladores: ver `/root/boreas_rgiot/CLAUDE.md
+  §"Nanoenvi de RG contra aglabs"`.
+
 ## Operación
 
 **Desplegar un cambio de este repo = `git pull --ff-only` y, si cambió la config,
