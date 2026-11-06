@@ -227,3 +227,6 @@ topic write aglabs/radar/soto_del_barco_01/radar_iot_001/#
 
 user anpr_iot_001
 topic write aglabs/anpr/soto_del_barco_01/anpr_iot_001/#
+
+user radar_iot_002
+topic write aglabs/radar/brion_radar/radar_iot_002/#
