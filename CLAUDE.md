@@ -693,6 +693,14 @@ topic write IAQ_RESP/+
   usa todavía.
 - Guía de configuración para instaladores: ver `/root/boreas_rgiot/CLAUDE.md
   §"Nanoenvi de RG contra aglabs"`.
+- **Contraseña rotada el 2026-11-06 — el firmware no acepta la larga con guiones.** La primera
+  (19 caracteres con `-`) estaba bien en el `passwordfile`, pero dos Nanoenvi V1.5.0 configurados
+  con ella al pie de la letra (CAINAN0420 y CAINAN0410) recibían `not authorised` cada ~90 s. Con
+  una de **12 caracteres solo letras y números** CAINAN0420 entró a la primera (09:56:51, TLSv1.2) y
+  sus medidas llegan a `nexus_iaq`. Regla: credenciales para Nanoenvi **alfanuméricas y ≤ 12
+  caracteres**. Copia de la anterior en `.secrets/rg_nanoenvi.old_20261106` (ya no vale).
+  Diagnóstico útil: el bróker **no registra el usuario** de un cliente rechazado; el Nanoenvi se
+  identifica por el `client_id`, que es su uuid.
 
 ## Operación
 
